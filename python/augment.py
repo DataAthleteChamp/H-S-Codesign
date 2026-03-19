@@ -6,6 +6,7 @@ and applies 8 augmentations per image. Idempotent — skips existing files.
 """
 
 import os
+from typing import Tuple
 import cv2
 import numpy as np
 import albumentations as A
@@ -45,7 +46,7 @@ def is_original_image(filename: str) -> bool:
     return True
 
 
-def augment_folder(folder_path: str) -> tuple[int, int]:
+def augment_folder(folder_path: str) -> Tuple[int, int]:
     """Apply all augmentations to original images in a folder.
 
     Returns (num_originals, num_created) count.
