@@ -85,8 +85,8 @@ def load_and_preprocess_split(person_dir: str, split: str,
         face_resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE),
                                   interpolation=cv2.INTER_AREA)
 
-        # Normalize to [0, 1]
-        face_normalized = face_resized.astype(np.float32) / 255.0
+        # Normalize to [-1, 1] (expected by MobileNetV2 pretrained on ImageNet)
+        face_normalized = face_resized.astype(np.float32) / 127.5 - 1.0
 
         images.append(face_normalized)
         labels.append(label)

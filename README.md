@@ -9,11 +9,14 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 ```
 .
 ├── README.md
+├── PROJECT.md          # Course project specification
 ├── python/
 │   ├── requirements.txt
-│   ├── augment.py          # Stage 1 — data augmentation (8 variants per image)
+│   ├── augment.py          # Stage 1 — data augmentation (12 variants per image)
 │   ├── preprocess.py       # Stage 2 — face detection, crop, resize, normalize
-│   ├── main.py             # Stage 3 — train MobileNetV2 + export INT8 TFLite
+│   ├── main.py             # Stage 3 — train MobileNetV2 + QAT + export INT8 TFLite
+│   ├── tune.py             # Hyperparameter tuning with Keras Tuner
+│   ├── compare.py          # Multi-config experiment comparison for report
 │   └── utils/
 │       ├── __init__.py
 │       ├── eval_utils.py   # precision/recall/F1, confusion matrix
@@ -25,9 +28,22 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 
 | Stage | Script | Description |
 |-------|--------|-------------|
-| 1 | `augment.py` | Applies 8 augmentations (flip, rotate, shift/scale, brightness, blur, compression, occlusion, grayscale) per original image. Idempotent. |
-| 2 | `preprocess.py` | Detects faces with MediaPipe, crops with 15 % padding, resizes to 96x96, normalizes to [0,1]. Saves `.npy` arrays. |
-| 3 | `main.py` | Two-phase transfer learning on MobileNetV2 (frozen head → fine-tune last 30 layers). Exports INT8-quantized TFLite model and generates `model.c` / `model.h` for ESP32. |
+| 1 | `augment.py` | Applies 12 augmentations (8 single + 4 combined) per original image. Idempotent. |
+| 2 | `preprocess.py` | Detects faces with MediaPipe, crops with 15 % padding, resizes to 96x96, normalizes to [-1,1]. Saves `.npy` arrays. |
+| 3 | `main.py` | Two-phase transfer learning on MobileNetV2 (frozen head → fine-tune), optional QAT, exports INT8-quantized TFLite model and generates `model.c` / `model.h` for ESP32. |
+
+## Design Space Parameters
+
+Configurable at the top of `main.py`:
+
+| Parameter | Default | Options | Trade-off |
+|-----------|---------|---------|-----------|
+| `ALPHA` | 0.35 | 0.25 / 0.35 / 0.5 / 1.0 | Model size vs accuracy |
+| `DENSE_UNITS` | 64 | 32 / 64 / 128 | Head capacity vs size |
+| `LABEL_SMOOTHING` | 0.1 | 0.0 – 0.15 | Confidence calibration |
+| `FINE_TUNE_LAYERS` | 20 | 10 / 15 / 20 / 30 | Overfitting vs adaptation |
+| `REJECTION_THRESHOLD` | 0.90 | 0.80 – 0.95 | False accept vs false reject |
+| `USE_QAT` | True | True / False | QAT vs PTQ quantization |
 
 ## Usage
 
@@ -43,6 +59,12 @@ python python/preprocess.py
 
 # 3. Train model and export to TFLite / C
 python python/main.py
+
+# Optional: Hyperparameter tuning
+python python/tune.py
+
+# Optional: Run experiment comparison for report
+python python/compare.py
 ```
 
 Outputs are written to `python/gen/` (model files, NumPy arrays, C source).
@@ -68,15 +90,19 @@ The `data/` directory is git-ignored because it contains personal photos.
 
 ## Model Details
 
-- **Architecture:** MobileNetV2 (ImageNet pretrained) with custom classification head
-- **Input:** 96x96x3 RGB
-- **Training:** two-phase transfer learning — frozen feature extraction then fine-tuning last 30 layers
-- **Quantization:** full INT8 (weights + activations) via TFLite representative-dataset calibration
+- **Architecture:** MobileNetV2 (ImageNet pretrained, `alpha=0.35`) with custom classification head
+- **Input:** 96x96x3 RGB, normalized to [-1, 1]
+- **Training:** Two-phase transfer learning — frozen feature extraction then fine-tuning last 20 layers
+- **Regularization:** Label smoothing (ε=0.1), dropout, early stopping
+- **Quantization:** Full INT8 via QAT (Quantization-Aware Training) or PTQ
+- **Unknown rejection:** Softmax confidence threshold (configurable, default 0.90)
 - **Output:** `model.tflite`, `model.c`, and `model.h` ready for ESP32-S3 deployment
 
 ## Dependencies
 
 - TensorFlow / Keras
+- TensorFlow Model Optimization (QAT)
+- Keras Tuner (hyperparameter search)
 - NumPy
 - scikit-learn
 - Albumentations

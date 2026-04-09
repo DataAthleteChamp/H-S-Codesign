@@ -34,13 +34,50 @@ AUGMENTATIONS = {
     '_gray': A.ToGray(p=1.0),
 }
 
+# Combined augmentation pipelines — apply multiple transforms together
+# for more realistic variability (crucial for small datasets)
+COMBINED_AUGMENTATIONS = {
+    '_combo1': A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.15, p=0.7),
+        A.GaussianBlur(blur_limit=(3, 5), p=0.3),
+    ]),
+    '_combo2': A.Compose([
+        A.ShiftScaleRotate(
+            shift_limit=0.05, scale_limit=0.1, rotate_limit=10, p=0.8,
+            border_mode=cv2.BORDER_REFLECT_101
+        ),
+        A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.1, p=0.5),
+        A.CoarseDropout(
+            max_holes=3, max_height=12, max_width=12,
+            min_holes=1, min_height=6, min_width=6,
+            fill_value=0, p=0.4
+        ),
+    ]),
+    '_combo3': A.Compose([
+        A.HorizontalFlip(p=0.5),
+        A.Rotate(limit=10, p=0.6, border_mode=cv2.BORDER_REFLECT_101),
+        A.ImageCompression(quality_lower=75, quality_upper=95, p=0.4),
+    ]),
+    '_combo4': A.Compose([
+        A.ToGray(p=0.3),
+        A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.2, p=0.7),
+        A.ShiftScaleRotate(
+            shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.5,
+            border_mode=cv2.BORDER_REFLECT_101
+        ),
+    ]),
+}
+
+ALL_AUGMENTATIONS = {**AUGMENTATIONS, **COMBINED_AUGMENTATIONS}
+
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp'}
 
 
 def is_original_image(filename: str) -> bool:
     """Check if a file is an original image (not an augmented one)."""
     name = os.path.splitext(filename)[0]
-    for suffix in AUGMENTATIONS:
+    for suffix in ALL_AUGMENTATIONS:
         if name.endswith(suffix):
             return False
     return True
@@ -73,7 +110,7 @@ def augment_folder(folder_path: str) -> Tuple[int, int]:
         # Convert BGR to RGB for albumentations
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-        for suffix, transform in AUGMENTATIONS.items():
+        for suffix, transform in ALL_AUGMENTATIONS.items():
             out_filename = f'{name_no_ext}{suffix}.png'
             out_path = os.path.join(folder_path, out_filename)
 
@@ -98,7 +135,7 @@ def main():
         return
 
     print(f'Augmenting images in: {data_dir}')
-    print(f'Augmentations per image: {len(AUGMENTATIONS)}')
+    print(f'Augmentations per image: {len(ALL_AUGMENTATIONS)}')
     print()
 
     total_originals = 0
@@ -118,12 +155,12 @@ def main():
             num_originals, num_created = augment_folder(split_dir)
             total_originals += num_originals
             total_created += num_created
-            total = num_originals * (1 + len(AUGMENTATIONS))
+            total = num_originals * (1 + len(ALL_AUGMENTATIONS))
             print(f'  {person}/{split}: {num_originals} originals -> {total} total ({num_created} new)')
 
     print()
     print(f'Summary: {total_originals} originals, {total_created} new augmented images created')
-    print(f'Each original has {len(AUGMENTATIONS)} augmented variants')
+    print(f'Each original has {len(ALL_AUGMENTATIONS)} augmented variants')
 
 
 if __name__ == '__main__':

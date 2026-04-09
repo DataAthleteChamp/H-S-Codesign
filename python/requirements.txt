@@ -5,3 +5,5 @@ scikit-learn
 albumentations
 opencv-python-headless
 mediapipe
+tensorflow-model-optimization
+keras-tuner
