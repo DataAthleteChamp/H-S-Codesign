@@ -61,12 +61,17 @@ def run_experiment(config: dict, x_train, y_train, x_test, y_test) -> dict:
 
     # Optional QAT
     export_model = model
+    is_qat = config['qat']
     if config['qat']:
-        export_model = train_model_qat(model, x_train, y_train, x_test, y_test,
-                                       label_smoothing=config['label_smoothing'])
+        try:
+            export_model = train_model_qat(model, x_train, y_train, x_test, y_test,
+                                           label_smoothing=config['label_smoothing'])
+        except (ImportError, AttributeError, ValueError) as e:
+            print(f'  QAT failed ({e}), falling back to PTQ.')
+            is_qat = False
 
     # Export and evaluate TFLite
-    tflite_model = export_model_to_tflite(export_model, x_train, is_qat=config['qat'])
+    tflite_model = export_model_to_tflite(export_model, x_train, is_qat=is_qat)
     tflite_size_kb = len(tflite_model) / 1024
 
     # Evaluate TFLite accuracy

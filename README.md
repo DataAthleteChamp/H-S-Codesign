@@ -15,8 +15,12 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 │   ├── augment.py          # Stage 1 — data augmentation (12 variants per image)
 │   ├── preprocess.py       # Stage 2 — face detection, crop, resize, normalize
 │   ├── main.py             # Stage 3 — train MobileNetV2 + QAT + export INT8 TFLite
+│   ├── qat_export.py       # QAT fallback using legacy Keras (tf-keras)
 │   ├── tune.py             # Hyperparameter tuning with Keras Tuner
 │   ├── compare.py          # Multi-config experiment comparison for report
+│   ├── CustomCNN_3ClassKeras.ipynb   # Exploration notebook — custom CNN baseline
+│   ├── MobileNetV2_3ClassKeras.ipynb # Exploration notebook — MobileNetV2 prototype
+│   ├── notebook.ipynb                # General experimentation notebook
 │   └── utils/
 │       ├── __init__.py
 │       ├── eval_utils.py   # precision/recall/F1, confusion matrix
@@ -38,9 +42,10 @@ Configurable at the top of `main.py`:
 
 | Parameter | Default | Options | Trade-off |
 |-----------|---------|---------|-----------|
-| `ALPHA` | 0.35 | 0.25 / 0.35 / 0.5 / 1.0 | Model size vs accuracy |
-| `DENSE_UNITS` | 64 | 32 / 64 / 128 | Head capacity vs size |
-| `LABEL_SMOOTHING` | 0.1 | 0.0 – 0.15 | Confidence calibration |
+| `ALPHA` | 0.35 | 0.35 / 0.5 / 0.75 / 1.0 | Model size vs accuracy |
+| `DENSE_UNITS` | 32 | 32 / 64 / 128 | Head capacity vs size |
+| `DROPOUT_1` / `DROPOUT_2` | 0.4 / 0.1 | 0.1 – 0.5 | Regularization strength |
+| `LABEL_SMOOTHING` | 0.05 | 0.0 – 0.15 | Confidence calibration |
 | `FINE_TUNE_LAYERS` | 20 | 10 / 15 / 20 / 30 | Overfitting vs adaptation |
 | `REJECTION_THRESHOLD` | 0.90 | 0.80 – 0.95 | False accept vs false reject |
 | `USE_QAT` | True | True / False | QAT vs PTQ quantization |
@@ -65,6 +70,9 @@ python python/tune.py
 
 # Optional: Run experiment comparison for report
 python python/compare.py
+
+# Fallback: QAT with legacy Keras (if QAT fails in main.py)
+TF_USE_LEGACY_KERAS=1 python python/qat_export.py
 ```
 
 Outputs are written to `python/gen/` (model files, NumPy arrays, C source).
@@ -93,21 +101,23 @@ The `data/` directory is git-ignored because it contains personal photos.
 - **Architecture:** MobileNetV2 (ImageNet pretrained, `alpha=0.35`) with custom classification head
 - **Input:** 96x96x3 RGB, normalized to [-1, 1]
 - **Training:** Two-phase transfer learning — frozen feature extraction then fine-tuning last 20 layers
-- **Regularization:** Label smoothing (ε=0.1), dropout, early stopping
+- **Regularization:** Label smoothing (ε=0.05), dropout (0.4/0.1), early stopping
 - **Quantization:** Full INT8 via QAT (Quantization-Aware Training) or PTQ
 - **Unknown rejection:** Softmax confidence threshold (configurable, default 0.90)
 - **Output:** `model.tflite`, `model.c`, and `model.h` ready for ESP32-S3 deployment
 
 ## Dependencies
 
-- TensorFlow / Keras
+- TensorFlow / Keras / tf-keras (legacy Keras for QAT fallback)
 - TensorFlow Model Optimization (QAT)
 - Keras Tuner (hyperparameter search)
+- TensorBoard
 - NumPy
 - scikit-learn
 - Albumentations
 - OpenCV (headless)
 - MediaPipe
+- Matplotlib / Pandas (notebooks)
 
 See `python/requirements.txt` for the full list.
 

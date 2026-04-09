@@ -1,5 +1,6 @@
 tensorflow
 keras
+tf-keras
 numpy
 scikit-learn
 albumentations
@@ -7,3 +8,6 @@ opencv-python-headless
 mediapipe
 tensorflow-model-optimization
 keras-tuner
+tensorboard
+matplotlib
+pandas

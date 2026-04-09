@@ -23,10 +23,13 @@ GEN_DIR = os.path.join(os.path.dirname(__file__), 'gen')
 IMG_SIZE = 96
 NUM_CLASSES = 3
 LABELS = {'Amine': 0, 'Rifki': 1, 'Jakub': 2}
-LABEL_SMOOTHING = 0.1
+LABEL_SMOOTHING = 0.05
 REJECTION_THRESHOLD = 0.90
 ALPHA = 0.35
 FINE_TUNE_LAYERS = 20
+DENSE_UNITS = 32
+DROPOUT_1 = 0.4
+DROPOUT_2 = 0.1
 
 
 def load_data():
@@ -55,9 +58,9 @@ def build_flat_model():
     inputs = base_model.input
     x = base_model.output
     x = keras.layers.GlobalAveragePooling2D()(x)
-    x = keras.layers.Dropout(0.3)(x)
-    x = keras.layers.Dense(64, activation='relu')(x)
-    x = keras.layers.Dropout(0.2)(x)
+    x = keras.layers.Dropout(DROPOUT_1)(x)
+    x = keras.layers.Dense(DENSE_UNITS, activation='relu')(x)
+    x = keras.layers.Dropout(DROPOUT_2)(x)
     outputs = keras.layers.Dense(NUM_CLASSES, activation='softmax')(x)
 
     model = keras.Model(inputs=inputs, outputs=outputs)
@@ -81,7 +84,7 @@ def main():
         layer.trainable = False
 
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
         loss=keras.losses.CategoricalCrossentropy(label_smoothing=LABEL_SMOOTHING),
         metrics=['accuracy']
     )
@@ -137,6 +140,12 @@ def main():
     print('\nConverting QAT model to TFLite INT8...')
     converter = tf.lite.TFLiteConverter.from_keras_model(qat_model)
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
+
+    def representative_dataset():
+        for i in range(len(x_train)):
+            yield [x_train[i:i + 1].astype(np.float32)]
+    converter.representative_dataset = representative_dataset
+
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
     converter.inference_input_type = tf.int8
     converter.inference_output_type = tf.int8

@@ -2,7 +2,7 @@
 Stage 1: Data Augmentation
 
 Walks data/ directory, finds person folders with train/test splits,
-and applies 8 augmentations per image. Idempotent — skips existing files.
+and applies 12 augmentations (8 single + 4 combined) per image. Idempotent — skips existing files.
 """
 
 import os

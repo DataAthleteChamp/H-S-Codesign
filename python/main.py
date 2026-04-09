@@ -28,10 +28,10 @@ USE_CACHED_DATA = True
 
 # --- Design space parameters ---
 ALPHA = 0.35                # MobileNetV2 depth multiplier (0.25/0.35/0.5/1.0)
-DENSE_UNITS = 64            # Dense head units (32/64/128)
-DROPOUT_1 = 0.3             # Dropout after global average pooling
-DROPOUT_2 = 0.2             # Dropout after dense layer
-LABEL_SMOOTHING = 0.1       # Prevents overconfident softmax (0.0–0.15)
+DENSE_UNITS = 32            # Dense head units (32/64/128)
+DROPOUT_1 = 0.4             # Dropout after global average pooling
+DROPOUT_2 = 0.1             # Dropout after dense layer
+LABEL_SMOOTHING = 0.05      # Prevents overconfident softmax (0.0–0.15)
 FINE_TUNE_LAYERS = 20       # Layers to unfreeze in phase 2 (scale with alpha)
 REJECTION_THRESHOLD = 0.90  # Confidence threshold for unknown rejection
 USE_QAT = True              # Use Quantization-Aware Training
@@ -108,7 +108,7 @@ def train_model(x_train: np.ndarray, y_train: np.ndarray,
     print(f'  alpha={ALPHA}, dense_units={DENSE_UNITS}, '
           f'label_smoothing={label_smoothing}, fine_tune_layers={fine_tune_layers}')
     model.compile(
-        optimizer=keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=keras.optimizers.Adam(learning_rate=0.0005),
         loss=keras.losses.CategoricalCrossentropy(label_smoothing=label_smoothing),
         metrics=['accuracy']
     )
@@ -278,13 +278,11 @@ def export_model_to_tflite(model: keras.Model, x_train: np.ndarray,
 
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
-    if not is_qat:
-        # PTQ needs a representative dataset for calibration
-        # Use ALL training samples for better calibration accuracy
-        def representative_dataset():
-            for i in range(len(x_train)):
-                yield [x_train[i:i + 1].astype(np.float32)]
-        converter.representative_dataset = representative_dataset
+    # Representative dataset required for full INT8 quantization
+    def representative_dataset():
+        for i in range(len(x_train)):
+            yield [x_train[i:i + 1].astype(np.float32)]
+    converter.representative_dataset = representative_dataset
 
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]
     converter.inference_input_type = tf.int8
@@ -427,7 +425,7 @@ if __name__ == '__main__':
             evaluate_model(qat_model, x_test, y_test)
             export_model = qat_model
             is_qat = True
-        except (ImportError, AttributeError) as e:
+        except (ImportError, AttributeError, ValueError) as e:
             print()
             print(f'Warning: QAT unavailable ({e}), falling back to PTQ.')
             print('This is expected with Keras 3.x / TF 2.21+.')

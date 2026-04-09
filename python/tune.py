@@ -25,7 +25,7 @@ TUNER_DIR = os.path.join(GEN_DIR, 'tuner')
 
 def build_tunable_model(hp) -> keras.Model:
     """Build model with tunable hyperparameters."""
-    alpha = hp.Choice('alpha', [0.25, 0.35, 0.5], default=0.35)
+    alpha = hp.Choice('alpha', [0.35, 0.5, 0.75], default=0.35)
     dense_units = hp.Choice('dense_units', [32, 64, 128], default=64)
     dropout_1 = hp.Float('dropout_1', 0.2, 0.5, step=0.1, default=0.3)
     dropout_2 = hp.Float('dropout_2', 0.1, 0.3, step=0.1, default=0.2)
