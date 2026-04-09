@@ -280,9 +280,9 @@ def export_model_to_tflite(model: keras.Model, x_train: np.ndarray,
 
     if not is_qat:
         # PTQ needs a representative dataset for calibration
+        # Use ALL training samples for better calibration accuracy
         def representative_dataset():
-            indices = np.random.choice(len(x_train), min(200, len(x_train)), replace=False)
-            for i in indices:
+            for i in range(len(x_train)):
                 yield [x_train[i:i + 1].astype(np.float32)]
         converter.representative_dataset = representative_dataset
 
@@ -418,15 +418,22 @@ if __name__ == '__main__':
 
     # Optional Phase 3: QAT
     export_model = model
+    is_qat = False
     if USE_QAT:
-        qat_model = train_model_qat(model, x_train, y_train, x_test, y_test)
-        print()
-        print('=== QAT Model Evaluation ===')
-        evaluate_model(qat_model, x_test, y_test)
-        export_model = qat_model
+        try:
+            qat_model = train_model_qat(model, x_train, y_train, x_test, y_test)
+            print()
+            print('=== QAT Model Evaluation ===')
+            evaluate_model(qat_model, x_test, y_test)
+            export_model = qat_model
+            is_qat = True
+        except (ImportError, AttributeError) as e:
+            print()
+            print(f'Warning: QAT unavailable ({e}), falling back to PTQ.')
+            print('This is expected with Keras 3.x / TF 2.21+.')
 
     # Export to TFLite
-    tflite_model = export_model_to_tflite(export_model, x_train, is_qat=USE_QAT)
+    tflite_model = export_model_to_tflite(export_model, x_train, is_qat=is_qat)
 
     # Evaluate TFLite model
     print()
