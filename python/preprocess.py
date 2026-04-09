@@ -2,16 +2,19 @@
 Stage 2: Preprocessing
 
 Loads all images from data/, detects and crops faces using MediaPipe,
-resizes to 96x96, normalizes to [0,1], and saves as NumPy arrays.
+resizes to 96x96, normalizes to [-1,1], and saves as NumPy arrays.
 """
 
 import os
 import cv2
 import numpy as np
 import mediapipe as mp
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python.core.base_options import BaseOptions
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 GEN_DIR = os.path.join(os.path.dirname(__file__), 'gen')
+FACE_MODEL_PATH = os.path.join(os.path.dirname(__file__), 'blaze_face_short_range.tflite')
 
 IMG_SIZE = 96
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp'}
@@ -21,23 +24,24 @@ LABELS = {'Amine': 0, 'Rifki': 1, 'Jakub': 2}
 NUM_CLASSES = len(LABELS)
 
 
-def detect_and_crop_face(img_rgb: np.ndarray, face_detection) -> np.ndarray:
-    """Detect face using MediaPipe and crop. Falls back to center crop."""
+def detect_and_crop_face(img_rgb: np.ndarray, detector: vision.FaceDetector) -> np.ndarray:
+    """Detect face using MediaPipe Tasks API and crop. Falls back to center crop."""
     h, w, _ = img_rgb.shape
-    results = face_detection.process(img_rgb)
 
-    if results.detections:
-        detection = results.detections[0]
-        bbox = detection.location_data.relative_bounding_box
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_rgb)
+    result = detector.detect(mp_image)
 
-        # Convert relative coordinates to absolute with padding
-        pad = 0.15  # 15% padding around the face
-        x_min = max(0, int((bbox.xmin - pad) * w))
-        y_min = max(0, int((bbox.ymin - pad) * h))
-        x_max = min(w, int((bbox.xmin + bbox.width + pad) * w))
-        y_max = min(h, int((bbox.ymin + bbox.height + pad) * h))
+    if result.detections:
+        bbox = result.detections[0].bounding_box
 
-        # Ensure we have a valid crop region
+        # Apply 15% padding around the detected face
+        pad_x = int(bbox.width * 0.15)
+        pad_y = int(bbox.height * 0.15)
+        x_min = max(0, bbox.origin_x - pad_x)
+        y_min = max(0, bbox.origin_y - pad_y)
+        x_max = min(w, bbox.origin_x + bbox.width + pad_x)
+        y_max = min(h, bbox.origin_y + bbox.height + pad_y)
+
         if x_max > x_min and y_max > y_min:
             return img_rgb[y_min:y_max, x_min:x_max]
 
@@ -51,7 +55,7 @@ def detect_and_crop_face(img_rgb: np.ndarray, face_detection) -> np.ndarray:
 
 
 def load_and_preprocess_split(person_dir: str, split: str,
-                              face_detection) -> tuple[list[np.ndarray], list[int]]:
+                              detector: vision.FaceDetector) -> tuple[list[np.ndarray], list[int]]:
     """Load all images from a person/split folder, preprocess them."""
     split_dir = os.path.join(person_dir, split)
     if not os.path.isdir(split_dir):
@@ -79,7 +83,7 @@ def load_and_preprocess_split(person_dir: str, split: str,
         img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
         # Detect and crop face
-        face_crop = detect_and_crop_face(img_rgb, face_detection)
+        face_crop = detect_and_crop_face(img_rgb, detector)
 
         # Resize to target size
         face_resized = cv2.resize(face_crop, (IMG_SIZE, IMG_SIZE),
@@ -106,12 +110,12 @@ def preprocess_all(data_dir: str = DATA_DIR, gen_dir: str = GEN_DIR):
     print(f'Labels: {LABELS}')
     print()
 
-    # Initialize MediaPipe Face Detection
-    mp_face_detection = mp.solutions.face_detection
-    face_detection = mp_face_detection.FaceDetection(
-        model_selection=1,  # Full-range model (better for varied distances)
+    # Initialize MediaPipe Face Detection (Tasks API)
+    options = vision.FaceDetectorOptions(
+        base_options=BaseOptions(model_asset_path=FACE_MODEL_PATH),
         min_detection_confidence=0.5
     )
+    detector = vision.FaceDetector.create_from_options(options)
 
     train_images, train_labels = [], []
     test_images, test_labels = [], []
@@ -122,18 +126,18 @@ def preprocess_all(data_dir: str = DATA_DIR, gen_dir: str = GEN_DIR):
             continue
 
         # Process train split
-        imgs, lbls = load_and_preprocess_split(person_dir, 'train', face_detection)
+        imgs, lbls = load_and_preprocess_split(person_dir, 'train', detector)
         train_images.extend(imgs)
         train_labels.extend(lbls)
         print(f'  {person}/train: {len(imgs)} images')
 
         # Process test split
-        imgs, lbls = load_and_preprocess_split(person_dir, 'test', face_detection)
+        imgs, lbls = load_and_preprocess_split(person_dir, 'test', detector)
         test_images.extend(imgs)
         test_labels.extend(lbls)
         print(f'  {person}/test: {len(imgs)} images')
 
-    face_detection.close()
+    detector.close()
 
     # Convert to NumPy arrays
     x_train = np.array(train_images, dtype=np.float32)

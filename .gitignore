@@ -12,6 +12,9 @@ venv/
 .venv/
 env/
 
+# MediaPipe model binary (download via script or from Google)
+python/*.tflite
+
 # OS
 .DS_Store
 

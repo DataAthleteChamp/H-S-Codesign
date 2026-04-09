@@ -17,19 +17,19 @@ DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 AUGMENTATIONS = {
     '_hflip': A.HorizontalFlip(p=1.0),
     '_rot': A.Rotate(limit=15, p=1.0, border_mode=cv2.BORDER_REFLECT_101),
-    '_shiftscale': A.ShiftScaleRotate(
-        shift_limit=0.1, scale_limit=0.1, rotate_limit=0, p=1.0,
+    '_shiftscale': A.Affine(
+        translate_percent=(-0.1, 0.1), scale=(0.9, 1.1), rotate=0, p=1.0,
         border_mode=cv2.BORDER_REFLECT_101
     ),
     '_bright': A.RandomBrightnessContrast(
         brightness_limit=0.2, contrast_limit=0.15, p=1.0
     ),
     '_blur': A.GaussianBlur(blur_limit=(3, 7), sigma_limit=(1, 3), p=1.0),
-    '_compress': A.ImageCompression(quality_lower=70, quality_upper=90, p=1.0),
+    '_compress': A.ImageCompression(quality_range=(70, 90), p=1.0),
     '_occlude': A.CoarseDropout(
-        max_holes=5, max_height=16, max_width=16,
-        min_holes=2, min_height=8, min_width=8,
-        fill_value=0, p=1.0
+        num_holes_range=(2, 5),
+        hole_height_range=(8, 16), hole_width_range=(8, 16),
+        fill=0, p=1.0
     ),
     '_gray': A.ToGray(p=1.0),
 }
@@ -43,27 +43,27 @@ COMBINED_AUGMENTATIONS = {
         A.GaussianBlur(blur_limit=(3, 5), p=0.3),
     ]),
     '_combo2': A.Compose([
-        A.ShiftScaleRotate(
-            shift_limit=0.05, scale_limit=0.1, rotate_limit=10, p=0.8,
+        A.Affine(
+            translate_percent=(-0.05, 0.05), scale=(0.9, 1.1), rotate=(-10, 10), p=0.8,
             border_mode=cv2.BORDER_REFLECT_101
         ),
         A.RandomBrightnessContrast(brightness_limit=0.15, contrast_limit=0.1, p=0.5),
         A.CoarseDropout(
-            max_holes=3, max_height=12, max_width=12,
-            min_holes=1, min_height=6, min_width=6,
-            fill_value=0, p=0.4
+            num_holes_range=(1, 3),
+            hole_height_range=(6, 12), hole_width_range=(6, 12),
+            fill=0, p=0.4
         ),
     ]),
     '_combo3': A.Compose([
         A.HorizontalFlip(p=0.5),
         A.Rotate(limit=10, p=0.6, border_mode=cv2.BORDER_REFLECT_101),
-        A.ImageCompression(quality_lower=75, quality_upper=95, p=0.4),
+        A.ImageCompression(quality_range=(75, 95), p=0.4),
     ]),
     '_combo4': A.Compose([
         A.ToGray(p=0.3),
         A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.2, p=0.7),
-        A.ShiftScaleRotate(
-            shift_limit=0.05, scale_limit=0.05, rotate_limit=5, p=0.5,
+        A.Affine(
+            translate_percent=(-0.05, 0.05), scale=(0.95, 1.05), rotate=(-5, 5), p=0.5,
             border_mode=cv2.BORDER_REFLECT_101
         ),
     ]),
