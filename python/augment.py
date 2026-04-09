@@ -2,34 +2,52 @@
 Stage 1: Data Augmentation
 
 Walks data/ directory, finds person folders with train/test splits,
-and applies 8 augmentations per image. Idempotent — skips existing files.
+and applies augmentations per image. Idempotent — skips existing files.
+
+By default only train/ is augmented so test metrics stay on clean held-out
+images. Use --include-test only if you intentionally want augmented test
+data (e.g. TTA-style experiments).
 """
 
+import argparse
 import os
 from typing import Tuple
-import cv2
-import numpy as np
+
 import albumentations as A
+import cv2
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 
-# Define augmentations with their suffixes
+# Define augmentations with their suffixes (each applied independently from the original)
 AUGMENTATIONS = {
     '_hflip': A.HorizontalFlip(p=1.0),
     '_rot': A.Rotate(limit=15, p=1.0, border_mode=cv2.BORDER_REFLECT_101),
-    '_shiftscale': A.ShiftScaleRotate(
-        shift_limit=0.1, scale_limit=0.1, rotate_limit=0, p=1.0,
-        border_mode=cv2.BORDER_REFLECT_101
+    # Albumentations 2.x: Affine replaces ShiftScaleRotate for shift+scale (no rotation here)
+    '_shiftscale': A.Affine(
+        scale=(0.9, 1.1),
+        translate_percent={'x': (-0.1, 0.1), 'y': (-0.1, 0.1)},
+        rotate=(0.0, 0.0),
+        shear=(0.0, 0.0),
+        border_mode=cv2.BORDER_REFLECT_101,
+        p=1.0,
     ),
     '_bright': A.RandomBrightnessContrast(
         brightness_limit=0.2, contrast_limit=0.15, p=1.0
     ),
+    '_hue': A.HueSaturationValue(
+        hue_shift_limit=10, sat_shift_limit=20, val_shift_limit=0, p=1.0
+    ),
     '_blur': A.GaussianBlur(blur_limit=(3, 7), sigma_limit=(1, 3), p=1.0),
-    '_compress': A.ImageCompression(quality_lower=70, quality_upper=90, p=1.0),
+    '_compress': A.ImageCompression(
+        compression_type='jpeg', quality_range=(70, 90), p=1.0
+    ),
+    # Mild occlusion: small rare patches so identity features are not wiped out
     '_occlude': A.CoarseDropout(
-        max_holes=5, max_height=16, max_width=16,
-        min_holes=2, min_height=8, min_width=8,
-        fill_value=0, p=1.0
+        num_holes_range=(1, 2),
+        hole_height_range=(4, 8),
+        hole_width_range=(4, 8),
+        fill=0,
+        p=1.0,
     ),
     '_gray': A.ToGray(p=1.0),
 }
@@ -44,6 +62,15 @@ def is_original_image(filename: str) -> bool:
         if name.endswith(suffix):
             return False
     return True
+
+
+def _rgb_to_bgr_for_write(image_rgb):
+    """Convert model output to BGR for cv2.imwrite (handles 1- or 3-channel)."""
+    if image_rgb.ndim == 2:
+        return cv2.cvtColor(image_rgb, cv2.COLOR_GRAY2BGR)
+    if image_rgb.shape[2] == 1:
+        return cv2.cvtColor(image_rgb, cv2.COLOR_GRAY2BGR)
+    return cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
 
 
 def augment_folder(folder_path: str) -> Tuple[int, int]:
@@ -82,8 +109,7 @@ def augment_folder(folder_path: str) -> Tuple[int, int]:
                 continue
 
             augmented = transform(image=img_rgb)['image']
-            # Convert back to BGR for cv2.imwrite
-            augmented_bgr = cv2.cvtColor(augmented, cv2.COLOR_RGB2BGR)
+            augmented_bgr = _rgb_to_bgr_for_write(augmented)
             cv2.imwrite(out_path, augmented_bgr)
             num_created += 1
 
@@ -91,26 +117,36 @@ def augment_folder(folder_path: str) -> Tuple[int, int]:
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Offline face dataset augmentation')
+    parser.add_argument(
+        '--include-test',
+        action='store_true',
+        help='Also augment test/ splits (default: train only)',
+    )
+    args = parser.parse_args()
+
     data_dir = os.path.abspath(DATA_DIR)
     if not os.path.isdir(data_dir):
         print(f'Data directory not found: {data_dir}')
         print('Please create data/<Person>/train/ and data/<Person>/test/ folders with images.')
         return
 
+    splits = ['train', 'test'] if args.include_test else ['train']
+
     print(f'Augmenting images in: {data_dir}')
+    print(f'Splits: {", ".join(splits)}')
     print(f'Augmentations per image: {len(AUGMENTATIONS)}')
     print()
 
     total_originals = 0
     total_created = 0
 
-    # Walk person folders
     for person in sorted(os.listdir(data_dir)):
         person_dir = os.path.join(data_dir, person)
         if not os.path.isdir(person_dir):
             continue
 
-        for split in ['train', 'test']:
+        for split in splits:
             split_dir = os.path.join(person_dir, split)
             if not os.path.isdir(split_dir):
                 continue

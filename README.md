@@ -11,7 +11,7 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 ├── README.md
 ├── python/
 │   ├── requirements.txt
-│   ├── augment.py          # Stage 1 — data augmentation (8 variants per image)
+│   ├── augment.py          # Stage 1 — data augmentation (9 variants per image)
 │   ├── preprocess.py       # Stage 2 — face detection, crop, resize, normalize
 │   ├── main.py             # Stage 3 — train MobileNetV2 + export INT8 TFLite
 │   └── utils/
@@ -25,7 +25,7 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 
 | Stage | Script | Description |
 |-------|--------|-------------|
-| 1 | `augment.py` | Applies 8 augmentations (flip, rotate, shift/scale, brightness, blur, compression, occlusion, grayscale) per original image. Idempotent. |
+| 1 | `augment.py` | Applies 9 augmentations per original image (flip, rotate, shift/scale, brightness/contrast, hue/saturation, blur, compression, mild occlusion dropout, grayscale). **Train only by default** so test metrics stay on clean images; pass `--include-test` to augment `test/` as well. Idempotent. |
 | 2 | `preprocess.py` | Detects faces with MediaPipe, crops with 15 % padding, resizes to 96x96, normalizes to [0,1]. Saves `.npy` arrays. |
 | 3 | `main.py` | Two-phase transfer learning on MobileNetV2 (frozen head → fine-tune last 30 layers). Exports INT8-quantized TFLite model and generates `model.c` / `model.h` for ESP32. |
 
@@ -35,7 +35,7 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 # Install dependencies
 pip install -r python/requirements.txt
 
-# 1. Augment training and test images
+# 1. Augment dataset (train/ only by default; add --include-test to include test/)
 python python/augment.py
 
 # 2. Preprocess (face detect + crop + normalize → .npy)
