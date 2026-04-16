@@ -10,6 +10,16 @@ ML pipeline for dormitory access control: data augmentation, MediaPipe face dete
 .
 ├── README.md
 ├── PROJECT.md          # Course project specification
+├── esp32/
+│   ├── CMakeLists.txt          # ESP-IDF root project file
+│   ├── sdkconfig.defaults      # Board config (ESP32-S3, PSRAM, large partition)
+│   └── main/
+│       ├── main.cpp            # App entry: capture → preprocess → inference → result
+│       ├── camera.cpp / .h     # OV2640 camera driver (XIAO ESP32-S3 Sense pins)
+│       ├── inference.cpp / .h  # TFLite Micro: load model, resize, quantize, predict
+│       ├── model.c / .h        # INT8 quantized MobileNetV2 as C array (662 KB)
+│       ├── CMakeLists.txt      # Component source registration
+│       └── idf_component.yml   # Dependencies (esp-tflite-micro, esp32-camera)
 ├── python/
 │   ├── requirements.txt
 │   ├── augment.py          # Stage 1 — data augmentation (12 variants per image)
@@ -76,6 +86,31 @@ TF_USE_LEGACY_KERAS=1 python python/qat_export.py
 ```
 
 Outputs are written to `python/gen/` (model files, NumPy arrays, C source).
+
+### ESP32 — Build & Flash
+
+Requires [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/) (v5.x recommended).
+
+```bash
+# Set up ESP-IDF environment (once per terminal session)
+. $IDF_PATH/export.sh
+
+cd esp32
+
+# Build
+idf.py build
+
+# Flash and monitor (replace /dev/cu.usbmodem* with your port)
+idf.py -p /dev/cu.usbmodem* flash monitor
+```
+
+On first build, ESP-IDF automatically downloads `managed_components/` (esp-tflite-micro, esp32-camera).
+
+To update the model after retraining, copy the new files:
+```bash
+cp python/gen/model.c esp32/main/
+cp python/gen/model.h esp32/main/
+```
 
 ## Data Format
 

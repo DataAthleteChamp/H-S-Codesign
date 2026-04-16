@@ -21,3 +21,9 @@ python/*.tflite
 # IDE
 .idea/
 .vscode/
+
+# ESP-IDF build artifacts
+esp32/build/
+esp32/managed_components/
+esp32/sdkconfig
+esp32/dependencies.lock
