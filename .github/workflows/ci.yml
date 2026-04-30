@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, jakubs-solution ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python lint + smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: python/requirements.txt
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff==0.6.9
+
+      - name: Ruff lint
+        run: ruff check python --output-format=github
+
+      - name: Compile-only smoke test
+        # Confirms python sources parse on a clean checkout without pulling
+        # the full TF stack. Heavier checks (TFLite eval, F3 regression) are
+        # gated on having model artefacts and run locally / in nightly.
+        run: |
+          python -m compileall -q python
+
+  firmware-syntax:
+    name: Firmware syntax sanity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Confirm CMakeLists and source layout
+        run: |
+          test -f esp32/main/CMakeLists.txt
+          test -f esp32/main/main.cpp
+          test -f esp32/main/inference.cpp
+          test -f esp32/main/camera.cpp
+          test -f esp32/main/model.h
+          test -f esp32/main/model.c
+          test -f esp32/sdkconfig.defaults
+
+      - name: Reject [0,1] preprocessing regression (finding F3)
+        # If anyone reintroduces the [0,1] firmware preprocess we caught in
+        # finding F3, fail the build before it merges. The current code uses
+        # the `mobilenet_v2_preprocess` helper - see docs/report/firmware-bug-note.md.
+        run: |
+          if grep -nE '/[ ]*255\.0f' esp32/main/inference.cpp; then
+            echo "::error file=esp32/main/inference.cpp::Firmware uses [0,1] preprocessing; training expects [-1,1]. See docs/report/firmware-bug-note.md (finding F3)."
+            exit 1
+          fi
+          grep -q 'mobilenet_v2_preprocess' esp32/main/inference.cpp
