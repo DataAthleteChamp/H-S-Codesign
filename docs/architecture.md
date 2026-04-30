@@ -1,98 +1,74 @@
-# System architecture
+# Architecture
 
-This document describes the end-to-end pipeline: how raw camera frames become
-class predictions on the XIAO ESP32-S3 Sense, and how the desktop training
-pipeline produces the INT8 model that ships in the firmware. Diagrams are
-written in Mermaid so GitHub renders them inline.
+This document summarizes the data, training, deployment, and evaluation flow for the DTU 02214 XIAO ESP32-S3 Sense face-recognition project. Diagrams are written in Mermaid so GitHub can render them directly.
 
-## Top-level data flow
+## Training and deployment pipeline
 
 ```mermaid
 flowchart LR
-    subgraph collect[1. Data collection]
-        A[Self-collected RGB photos<br>3 classes: Amine / Rifki / Jakub]
-    end
-    subgraph desktop[2. Desktop training pipeline - Python 3.12 / TF 2.21]
-        B[augment.py<br>Albumentations 2.0<br>12 variants per original] --> C
-        C[preprocess.py<br>MediaPipe Tasks face detect<br>center-crop + resize 96x96<br>normalize -1..1] --> D
-        D[main.py / qat_export.py<br>MobileNetV2 alpha=0.35 + dense head<br>QAT INT8 export] --> E
-        E[python/gen/model.tflite<br>662 KB INT8] --> F
-        F[utils/export_tflite.py<br>writes model.h + model.c] --> G[python/deploy.py<br>copies into esp32/main/]
-    end
-    subgraph firmware[3. ESP32-S3 firmware - C++ / ESP-IDF 5.x]
-        H[OV2640 camera<br>320x240 RGB565] --> I
-        I[main.cpp<br>RGB565 -> RGB888<br>center-crop -> 96x96] --> J
-        J[inference.cpp<br>mobilenet_v2_preprocess -1..1<br>quantize INT8] --> K
-        K[TFLite Micro<br>arena ~1 MB on PSRAM] --> L
-        L[Softmax + rejection<br>q >= 0.77 -> log class<br>else log REJECT]
-    end
-    subgraph eval[4. Evaluation harness]
-        M[bench/build_originals_test.py<br>n=60 captures] --> N
-        N[bench/eval_branches.py<br>per-sample npz] --> O
-        O[bench/compare_models.py<br>paired McNemar] --> P
-        P[bench/run_stats.py<br>Wilson CI + cluster bootstrap<br>+ rejection sweep] --> Q[docs/figures + bench/results]
-    end
+    A["data/&lt;class&gt;/{train,test}<br/>Amine / Rifki / Jakub<br/>private, gitignored"]
+    B["preprocess.py<br/>MediaPipe face crop<br/>96x96 RGB<br/>MobileNetV2 [-1,1]"]
+    C["augment.py<br/>Albumentations<br/>8 single + 4 combined<br/>train-time robustness"]
+    D["main.py<br/>MobileNetV2 alpha=0.35<br/>transfer learning + QAT<br/>dense=32"]
+    E["qat_export.py<br/>PTQ INT8 conversion<br/>representative_dataset<br/>full-integer TFLite"]
+    F["python/gen/model.tflite<br/>662 KB<br/>~10.7M MACs"]
+    G["deploy.py / export_tflite.py<br/>xxd-style C array"]
+    H["esp32/main/{model.h, model.c}<br/>compiled into ESP-IDF app"]
+    I["inference.cpp<br/>RGB565 camera frame<br/>crop/resize -> [-1,1]<br/>quantize INT8"]
+    J["classification<br/>reject if confidence &lt; 0.9<br/>ESP_LOGI output"]
 
-    A --> B
-    G --> H
-    E -. used by .-> M
+    A --> B --> C --> D --> E --> F --> G --> H --> I --> J
 ```
 
-## Where the artefacts live
+> Implementation note: the current scripts apply `augment.py` to image files before rebuilding the `preprocess.py` NumPy caches. The diagram shows the logical transformations that must remain aligned: raw captures, face-crop/resize/normalization, train-time augmentation, model training, INT8 export, and firmware inference.
 
-| Stage | Inputs | Outputs |
-|---|---|---|
-| `python/augment.py` | `data/<class>/train/<id>.jpg` | `data/<class>/train/<id>_<aug>.jpg` (12 variants) |
-| `python/preprocess.py` | augmented `data/<class>/train` + raw `data/<class>/test` | `python/gen/x_train.npy` / `x_test.npy` / `y_*.npy` |
-| `python/main.py` (or `qat_export.py`) | `python/gen/x_*.npy` | `python/gen/model.{tflite,h,c}` + training history |
-| `python/deploy.py` | `python/gen/model.{h,c}` | `esp32/main/model.{h,c}` |
-| `python/bench/build_originals_test.py` | `data/<class>/test/*.jpg` (originals only) | `python/gen/x_test_originals.npy` etc. |
-| `python/bench/compare_models.py` | two `.tflite` files + originals npy | per-sample `.npz` + McNemar markdown |
-| `python/bench/run_stats.py` | per-sample `.npz` | `bench/results/stats_summary.md` + JSON |
+### Data layout
 
-## ESP32-S3 firmware loop
+Images live under `data/<class>/{train,test}` with class folders `Amine`, `Rifki`, and `Jakub`. The `data/` directory is ignored because it contains identifiable face photos. The report distinguishes original captures from augmented derivatives so the test unit is a capture, not a generated file.
 
-`esp32/main/main.cpp` holds the application loop; `esp32/main/inference.cpp`
-owns the TFLite Micro interpreter and INT8 quantization step. Together they
-implement:
+### Preprocessing
+
+`python/preprocess.py` detects faces using MediaPipe, crops with padding, resizes to `96x96` RGB, and maps pixel values from `[0,255]` to `[-1,1]`. That range is the MobileNetV2 convention and must match firmware preprocessing exactly. The F3 regression evidence is published in [`bench/results/firmware_preprocess_check.md`](../bench/results/firmware_preprocess_check.md).
+
+### Augmentation
+
+`python/augment.py` uses Albumentations to create eight single-transform variants and four combined variants. The purpose is robustness to flips, small rotations, affine shifts, brightness/contrast changes, blur, compression, occlusion, and grayscale effects. Evaluation treats augmented test files as correlated diagnostics, not independent test samples.
+
+### Training
+
+`python/main.py` and `python/qat_export.py` implement the selected MobileNetV2 configuration: `alpha=0.35`, `IMG_SIZE=96`, dense head `32`, dropout, label smoothing, and QAT. This is the smallest-alpha configuration within one percentage point of the best tuner trial and is documented in [`bench/results/tuner_summary.md`](../bench/results/tuner_summary.md).
+
+### Quantization and export
+
+`python/qat_export.py` converts the QAT model to full INT8 TFLite using a representative dataset drawn from the training split. `python/utils/export_tflite.py` writes xxd-style C arrays (`model.c` and `model.h`) for ESP-IDF. The resulting `python/gen/model.tflite` is 662,056 bytes and has 10,695,184 estimated compute MACs according to [`bench/results/mac_count.csv`](../bench/results/mac_count.csv).
+
+### Firmware inference
+
+The ESP-IDF application captures RGB565 frames from the XIAO ESP32-S3 Sense camera path, converts to RGB, crops/resizes to `96x96`, applies the same `[-1,1]` MobileNetV2 preprocessing, quantizes to INT8, invokes TFLite Micro, and logs either the predicted class or a rejection through `ESP_LOGI`. The default rejection threshold is `0.9`.
+
+## Evaluation harness flow
 
 ```mermaid
-sequenceDiagram
-    participant CAM as OV2640 (320x240 RGB565)
-    participant APP as main.cpp
-    participant PRE as inference.cpp::mobilenet_v2_preprocess
-    participant TFL as TFLite Micro
-    participant HOST as USB-CDC (host)
+flowchart TB
+    A["data/&lt;class&gt;/test<br/>original captures only"]
+    B["build_originals_test.py<br/>filter augmentation suffixes<br/>n=60 capture IDs"]
+    C["bench/results/x_test_originals_96_pm1.npy<br/>bench/results/y_test_originals.npy<br/>capture_ids_originals.npy"]
+    D["eval_branches.py<br/>run INT8 TFLite<br/>save predictions/probabilities"]
+    E["*.npz result files<br/>jakubs_qat_originals_test.npz"]
+    F["stats.py / run_stats.py<br/>accuracy, macro-F1<br/>Wilson CI, cluster bootstrap<br/>rejection sweep"]
+    G["bench/results/*.md, *.csv, *.png<br/>report-ready evidence"]
 
-    loop 1 Hz
-        CAM->>APP: esp_camera_fb_get()
-        APP->>APP: RGB565 -> RGB888, center-crop to 96x96
-        APP->>PRE: float v = pixel/127.5 - 1.0
-        PRE->>PRE: int8 q = clip(v/INPUT_SCALE + INPUT_ZERO_POINT)
-        PRE->>TFL: invoke()
-        TFL-->>PRE: int8 logits
-        PRE->>PRE: argmax + softmax in INT8 domain
-        PRE-->>APP: (class_idx, conf_q)
-        APP->>APP: if conf_q < REJECTION_THRESHOLD_Q: class = REJECT
-        APP->>HOST: log "Class: <name>, Confidence: <q>"
-    end
-
-    Note over APP,HOST: Send byte 'S' over CDC to toggle a per-frame RGB888 dump<br>that python/preview_pred.py renders to a Pygame window.
+    A --> B --> C --> D --> E --> F --> G
 ```
 
-## Memory layout on the XIAO ESP32-S3 Sense
+### Originals-only test set
 
-- **Flash 8 MB**: OTA-disabled single-app-large partition (`sdkconfig.defaults`)
-  holds firmware + the `model_binary` C array (~662 KB).
-- **Internal SRAM 512 KB**: stack + scratch buffers + `tflu::MicroAllocator`
-  metadata.
-- **PSRAM 8 MB Octal**: TFLite Micro tensor arena (~1 MB), camera frame
-  buffer (~150 KB for 320x240 RGB565), preview buffer (~230 KB for 320x240
-  RGB888 when streaming is enabled).
+The honest test set uses 60 independent captures: 20 originals per class. This fixes finding F1, where augmented derivatives in the test folder made the file-level test appear to have 780 samples. The headline result is therefore 98.33% accuracy and 0.9833 macro-F1 on `n=60`, as reported in [`bench/results/calibration_report.md`](../bench/results/calibration_report.md).
 
-The choice of `alpha=0.35` and `IMG_SIZE=96` is driven by these constraints:
-larger inputs blow the arena past available PSRAM headroom once the camera
-double-buffer and the USB-CDC streaming buffer are factored in. See
-`docs/report/outline.md` (§Design and implementation) for the trade-off
-analysis and `bench/results/mac_count.csv` for the corresponding compute
-budget (~10.7 M MACs).
+### Statistical summaries
+
+The evaluation scripts save per-sample predictions and probabilities so later statistics can be recomputed without rerunning training. [`bench/results/stats_summary.md`](../bench/results/stats_summary.md) contains Wilson confidence intervals, cluster bootstrap intervals, and rejection-threshold analysis. Pairwise comparisons use exact McNemar tests when more than one candidate model is available.
+
+### Firmware regression check
+
+`python/bench/firmware_preprocess_check.py` is an offline regression test for the firmware preprocessing contract. It compares the old buggy `[0,1]` formula with the fixed `[-1,1]` MobileNetV2 formula using the quantization parameters from the TFLite model. The expected fixed distribution is centered near zero and uses both positive and negative halves of int8.

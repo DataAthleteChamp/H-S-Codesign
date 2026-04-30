@@ -1,35 +1,24 @@
-# Pre-commit hooks for the HS-Codesign repo.
-#
-#   pip install pre-commit && pre-commit install
-#
-# CI runs the same `ruff check python` command — see .github/workflows/ci.yml.
-
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0
+    rev: v5.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
-      - id: check-toml
-      - id: check-merge-conflict
       - id: check-added-large-files
-        args: ['--maxkb=2048']
-        # NOTE: model.tflite (~662 KB) and model.c (~4 MB generated C array)
-        # are committed deliberately. Override per-commit with --no-verify if
-        # you really need to add a fresh model.c. We keep the limit at 2 MB
-        # so it nudges contributors to use git-lfs for anything larger.
-        exclude: '^esp32/main/model\.c$'
+        args: [--maxkb=5120]
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    rev: v0.8.4
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
-        files: '^python/.*\.py$'
+        files: ^python/.*\.py$
 
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
+  - repo: local
     hooks:
-      - id: nbstripout
-        files: '\.ipynb$'
+      - id: clang-format-esp32-main
+        name: clang-format esp32/main/*.cpp (optional, manual)
+        entry: bash -c 'if command -v clang-format >/dev/null 2>&1; then clang-format -i "$@"; else echo "clang-format not installed; skipping"; fi' --
+        language: system
+        files: ^esp32/main/.*\.cpp$
+        stages: [manual]

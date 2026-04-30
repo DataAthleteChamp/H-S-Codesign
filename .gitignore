@@ -1,40 +1,43 @@
-# User images (private, large)
+# Private data
 data/
 
-# Generated outputs - keep model artifacts, ignore caches and large arrays
-python/gen/cache/
-python/gen/tuner/
-python/gen/__pycache__/
-python/gen/*.npy
-python/gen/x_*.npy
-python/gen/y_*.npy
-python/gen/baseline_smoke_*
-python/gen/model.c
-python/gen/model.keras
+# Python generated artefacts
+python/gen/*
+!python/gen/
+!python/gen/baseline_model.tflite
+python/*.tflite
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+*.keras
 
-# Bench results - keep markdown/csv/json/png reports, ignore large arrays
+# Published benchmark outputs are kept, but raw NumPy scratch arrays stay local.
 bench/results/*.npy
 
-# Python
-__pycache__/
-*.pyc
-*.egg-info/
+# Virtual environments and local env files
 venv/
 .venv/
 env/
+.env
 
-# MediaPipe model binary (download via script or from Google)
-python/*.tflite
-
-# OS
-.DS_Store
-
-# IDE
-.idea/
-.vscode/
-
-# ESP-IDF build artifacts
+# ESP-IDF build artefacts
 esp32/build/
 esp32/managed_components/
-esp32/sdkconfig
 esp32/dependencies.lock
+esp32/sdkconfig
+sdkconfig
+
+# Logs and local OS/editor files
+*.log
+.DS_Store
+.vscode/
+.idea/
+
+# Python build/distribution outputs
+build/
+dist/

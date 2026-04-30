@@ -1,237 +1,237 @@
 # Face Recognition for the XIAO ESP32-S3 Sense
 
-> A 3-class face-recognition pipeline that fits in 662 KB of INT8 TFLite,
-> targets the **XIAO ESP32-S3 Sense** development board, and ships with a
-> reproducible Python training pipeline, a statistically-grounded evaluation
-> harness, and the corresponding ESP-IDF firmware.
-> Built as the **DTU 02214 — ML for Embedded Systems** course project
-> (Spring 2026).
+> DTU 02214 embedded-ML project for the XIAO ESP32-S3 Sense.
+> Recognises Amine, Rifki, and Jakub; rejects unknown faces with a confidence threshold.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Python: 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](python/requirements.txt)
-[![TensorFlow: 2.21](https://img.shields.io/badge/TensorFlow-2.21-orange.svg)](python/requirements.txt)
-[![ESP-IDF: 5.x](https://img.shields.io/badge/ESP--IDF-5.x-red.svg)](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/)
+[![CI](https://img.shields.io/github/actions/workflow/status/DataAthleteChamp/H-S-Codesign/ci.yml?branch=jakubs-solution&label=ci)](https://github.com/DataAthleteChamp/H-S-Codesign/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](python/requirements.txt)
+[![ESP-IDF 5.x](https://img.shields.io/badge/ESP--IDF-5.x-red.svg)](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/)
 
 ## What this is
 
-A complete edge-ML codesign exercise: collect images of three team members,
-train a quantized MobileNetV2 classifier on a laptop, deploy it to a
-dual-core 240 MHz ESP32-S3 with 2 MB SRAM and 8 MB PSRAM, and measure honest
-on-device performance. The repo includes everything the course asks for:
-training and conversion pipeline (Python), application code (C++ on
-ESP-IDF), and a written design-space / verification report (`docs/report/`).
+This repository is a DTU 02214 Machine Learning for Embedded Systems / Hardware-Software Codesign course project targeting the Seeed Studio XIAO ESP32-S3 Sense: it trains and deploys a compact face-recognition model for three team members (`Amine`, `Rifki`, and `Jakub`) and uses a softmax confidence threshold to reject unknown faces rather than forcing every frame into one of the three known classes.
 
-| Stat | Value |
-|---|---|
-| Architecture | MobileNetV2 alpha = 0.35 + small dense head |
-| Input | 96 × 96 RGB, MobileNetV2 [-1, 1] preprocessing |
-| Quantization | INT8 QAT (full-integer) |
-| TFLite size | **662 KB** |
-| Total MACs | ~10.7 M (Conv 9.07 M, DW-Conv 1.58 M, FC 41 K) |
-| Honest accuracy (n = 60 captures) | **98.33 %** for the deployed model, **93.33 %** for the F2-clean baseline |
-| Operating rejection threshold | softmax q ≥ 0.77 (100 % accepted accuracy, 96.7 % accept rate) |
-| ESP32-S3 latency | not yet measured on hardware (see `docs/report/outline.md`) |
+## Quick stats
 
-> **What "honest" means:** we re-evaluate on the 60 *original* captures only
-> (the test split was previously contaminated with augmented variants of
-> those same captures — finding F1). Both candidate models, the McNemar
-> head-to-head, and the bootstrap CIs are computed at the capture level.
+| Item | Current value | Source / note |
+| --- | ---: | --- |
+| Final model | MobileNetV2, `alpha=0.35`, `IMG_SIZE=96`, dense head `32` | `python/main.py`, `python/qat_export.py` |
+| Quantization | Full INT8, QAT + representative dataset | `python/qat_export.py` |
+| TFLite size | **662,056 bytes** / **646.5 KiB** / **662 KB** | `python/gen/model.tflite` |
+| MACs | **10,695,184** total compute MACs | `bench/results/mac_count.csv` |
+| Honest test accuracy | **98.33%** (`59/60`) | `bench/results/calibration_report.md` |
+| Honest macro-F1 | **0.9833** | `bench/results/calibration_report.md` |
+| Default rejection threshold | **0.90** firmware default | `REJECTION_THRESHOLD` in Python export |
+| ESP32-S3 latency | **TBD** | Real-hardware latency has not yet been measured[^latency] |
 
-## Repository layout
+[^latency]: The repository contains analytical and desktop-proxy evidence, but no final measured latency on the XIAO ESP32-S3 Sense hardware yet. Treat latency as a required follow-up measurement before making real-time claims.
 
-```
+## Repo layout
+
+```text
 .
-├── README.md                          # this file
-├── PROJECT.md                         # course project specification
-├── LICENSE                            # MIT
-├── CITATION.cff                       # how to cite
-├── CONTRIBUTING.md                    # contribution + commit rules
-├── Makefile                           # one-line developer commands
-├── python/
-│   ├── augment.py                     # Albumentations 2.0, 12 augmentations
-│   ├── preprocess.py                  # MediaPipe Tasks API face detection + crop
-│   ├── main.py                        # design-space training + QAT + INT8 export
-│   ├── qat_export.py                  # legacy-Keras QAT fallback
-│   ├── tune.py                        # Keras-Tuner Hyperband
-│   ├── deploy.py                      # write esp32/main/model.{c,h}
-│   ├── utils/
-│   │   ├── train_val_split.py         # F2 fix: held-out val from train
-│   │   ├── eval_utils.py
-│   │   └── export_tflite.py
-│   ├── bench/                         # evaluation harness (independent of training)
-│   │   ├── eval_branches.py           # INT8 TFLite eval driver
-│   │   ├── build_originals_test.py    # cleaned originals-only test set
-│   │   ├── compare_models.py          # paired McNemar head-to-head
-│   │   ├── stats.py                   # Wilson CI, cluster bootstrap, exact McNemar
-│   │   ├── run_stats.py               # rejection sweep + bootstrap driver
-│   │   ├── run_baseline_retrain.py    # F2-clean retrain (insurance)
-│   │   ├── distill_tuner.py           # parse Keras-Tuner trials
-│   │   ├── mac_count.py               # MAC count from a TFLite file
-│   │   ├── footprint.py               # flash/params/arena summary
-│   │   ├── make_figures.py            # report figures
-│   │   └── firmware_preprocess_check.py  # F3 regression test
-│   ├── tools/
-│   │   └── serial_latency_logger.py   # parse on-device latency_ms log lines
-│   ├── realworld_webcam_test.py       # desktop webcam proxy test
-│   └── gen/                           # generated artefacts (model.tflite, etc.)
-├── esp32/
-│   ├── sdkconfig.defaults             # ESP32-S3, PSRAM Octal, large partition
-│   └── main/
-│       ├── main.cpp                   # capture → preprocess → infer → log
-│       ├── inference.cpp              # TFLite Micro + MobileNetV2 [-1,1]
-│       ├── camera.cpp                 # OV2640 driver for XIAO Sense
-│       ├── model.{c,h}                # INT8 model as a C array
-│       ├── CMakeLists.txt
-│       └── idf_component.yml
-├── bench/results/                     # markdown + CSV + JSON evaluation outputs
-├── docs/
-│   ├── decision.md                    # team-signed consolidation decision
-│   ├── branch-audit.md                # per-branch inventory + history
-│   ├── architecture.md                # pipeline + firmware diagrams
-│   ├── figures/                       # report figures (PNG)
-│   └── report/                        # full report markdown sources
-└── data/                              # captured images (git-ignored, private)
+├── README.md                         # public project overview and reproduction guide
+├── Makefile                          # common developer commands
+├── LICENSE                           # MIT license
+├── CITATION.cff                      # citation metadata
+├── CONTRIBUTING.md                   # contribution notes for the course repo
+├── python/                           # training, preprocessing, QAT export, and evaluation helpers
+│   ├── augment.py                    # Albumentations image augmentation
+│   ├── preprocess.py                 # MediaPipe face crop, resize, and [-1,1] normalization
+│   ├── main.py                       # MobileNetV2 transfer learning and export path
+│   ├── qat_export.py                 # legacy-Keras QAT export path
+│   ├── bench/                        # reproducible evaluation harnesses
+│   ├── utils/                        # TFLite export and train/validation helpers
+│   └── gen/                          # generated models and caches; mostly gitignored
+├── esp32/                            # ESP-IDF firmware for XIAO ESP32-S3 Sense
+│   ├── sdkconfig.defaults            # checked-in ESP32-S3 defaults
+│   └── main/                         # camera, inference, app entry, and model C array
+├── bench/                            # published benchmark artefacts
+│   └── results/                      # markdown/csv/json/png/npz evidence used by the report
+├── docs/                             # architecture notes and report support material
+│   ├── architecture.md               # Mermaid pipeline diagrams
+│   └── report/                       # report outline, datasheet, AI note, bug notes
+└── data/                             # private face images; gitignored and not redistributed
 ```
 
 ## Hardware setup
 
-- **Board:** [Seeed XIAO ESP32-S3 Sense](https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/)
-- **MCU:** ESP32-S3, dual Xtensa LX7 @ 240 MHz, 512 KB SRAM + 8 MB PSRAM (Octal)
-- **Camera:** OV2640 on the Sense board's expansion ribbon
-- **Flash:** 8 MB (`CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE`)
-- **Power:** USB-C (no external supply needed for tethered demo)
+The target board is the [Seeed Studio XIAO ESP32-S3 Sense](https://wiki.seeedstudio.com/xiao_esp32s3_getting_started/), which combines an ESP32-S3 module with a small camera expansion board.
 
-The default firmware captures 320 × 240 RGB565, center-crops, scales to 96 × 96,
-quantizes with the model's input scale and zero-point, and runs inference once
-per second. Send the byte `S` over USB-CDC to toggle a per-frame RGB888 dump
-that the host-side `python/preview_pred.py` can render.
+| Part | Role |
+| --- | --- |
+| ESP32-S3 MCU | Dual-core Xtensa LX7 target for TFLite Micro inference. |
+| PSRAM | Required for the camera frame buffer and TFLite Micro tensor arena. |
+| OV camera module | Captures RGB565 frames through the XIAO Sense camera connector. |
+| USB-C | Flashing, serial monitor, and `ESP_LOGI` output. |
+| BOOT / RESET buttons | Used for flashing and recovery, depending on host tooling. |
 
-## Reproduce: training pipeline
+Pin routing for the camera is board-specific and is summarized in the Seeed wiki and mirrored by the firmware camera configuration under `esp32/main/`. Use the Sense camera module supplied for the board; a plain XIAO ESP32-S3 without the Sense expansion does not provide the same camera path.
 
-Requires Python 3.12 and ~6 GB of RAM. CUDA is *not* required; the Phase 2
-baseline retrain runs CPU-only with `tf.config.experimental.enable_op_determinism()`
-under `CUDA_VISIBLE_DEVICES=""`.
+## Reproduce: training
 
-```bash
-# 1. one-time setup
-make venv                       # create ./venv and install requirements.txt
+The private face dataset is intentionally not committed. Place images under `data/` using the exact class names expected by `python/preprocess.py`.
 
-# 2. drop captured images under data/<class>/{train,test}/
-
-# 3. augment (12 variants per original; Albumentations 2.0)
-make augment
-
-# 4. preprocess: MediaPipe face detect, crop, resize 96×96, normalize [-1,1]
-#    (cached to python/gen/x_*.npy and y_*.npy)
-source venv/bin/activate
-python python/preprocess.py
-
-# 5. train + QAT + INT8 export with the leak-free validation split
-make train                      # design-space main.py
-# OR fallback for environments where TF Keras 3.x QAT is finicky:
-make qat                        # legacy tf-keras path
-
-# 6. deploy: regenerate esp32/main/model.{c,h}
-python python/deploy.py
+```text
+data/
+├── Amine/
+│   ├── train/
+│   └── test/
+├── Rifki/
+│   ├── train/
+│   └── test/
+└── Jakub/
+    ├── train/
+    └── test/
 ```
 
-Generated artefacts are written to `python/gen/` and the C arrays end up in
-`esp32/main/`. The `python/gen/baseline_model.tflite` is the F2-clean
-insurance retrain; `python/gen/model.tflite` is the deployed candidate.
+Recommended local environment:
+
+```bash
+python3.12 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r python/requirements.txt
+```
+
+Generate image-space augmentations. The script is idempotent and creates 8 single-transform variants plus 4 combined variants per original image.
+
+```bash
+python python/augment.py
+```
+
+Build the cached NumPy arrays. `python/preprocess.py` detects faces with MediaPipe, applies a padded crop, resizes to `96x96` RGB, and normalizes pixels to MobileNetV2 `[-1, 1]`.
+
+```bash
+python python/preprocess.py
+```
+
+Train the MobileNetV2 transfer-learning model and export artefacts. The selected configuration is `alpha=0.35`, `IMG_SIZE=96`, `dense_units=32`, label smoothing `0.05`, and QAT enabled.
+
+```bash
+python python/main.py
+```
+
+If the modern Keras path cannot run QAT because of TensorFlow Model Optimization compatibility, use the legacy-Keras QAT exporter. This is the path that writes the final INT8 `.tflite` and C-array headers.
+
+```bash
+TF_USE_LEGACY_KERAS=1 python python/qat_export.py
+```
+
+Run the honest originals-only evaluation harness. The checked-in benchmark artefacts already contain the cleaned `n=60` arrays, but the command below documents the intended invocation.
+
+```bash
+python -m python.bench.eval_branches \
+  --model python/gen/model.tflite \
+  --x bench/results/x_test_originals_96_pm1.npy \
+  --y bench/results/y_test_originals.npy \
+  --capture-ids bench/results/capture_ids_originals.npy \
+  --norm pm1 \
+  --out bench/results/jakubs_qat_originals_test.npz
+```
+
+Check the firmware-preprocessing regression test after changing either training preprocessing or firmware quantization.
+
+```bash
+python -m python.bench.firmware_preprocess_check \
+  --tflite python/gen/model.tflite
+```
+
+The same commands are wrapped by the top-level Makefile:
+
+```bash
+make venv
+make augment
+make train
+make qat
+make eval
+make bench-firmware-check
+```
 
 ## Reproduce: firmware build
 
-Install [ESP-IDF v5.x](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/get-started/),
-then:
+Install ESP-IDF v5.x using Espressif's official guide, then export the environment in every terminal session that builds firmware.
 
 ```bash
-. $IDF_PATH/export.sh           # once per shell
-cd esp32
-idf.py set-target esp32s3
-idf.py menuconfig               # optional: tweak partition / log level
-make firmware-build             # equivalent to: idf.py build
-make firmware-flash             # idf.py -p $PORT flash monitor
+. "$IDF_PATH/export.sh"
 ```
 
-`managed_components/` (esp-tflite-micro, esp32-camera) are downloaded
-automatically on the first build.
+Configure and build for the ESP32-S3 target:
+
+```bash
+cd esp32
+idf.py set-target esp32s3
+idf.py menuconfig    # optional: inspect camera, PSRAM, partition, and log settings
+idf.py build
+```
+
+Flash and monitor the board:
+
+```bash
+idf.py flash monitor
+```
+
+If your serial port is not auto-detected, pass it explicitly:
+
+```bash
+idf.py -p /dev/cu.usbmodemXXXX flash monitor
+```
+
+The firmware logs predictions through `ESP_LOGI`. The final path is camera capture, RGB565 conversion, MobileNetV2 `[-1,1]` preprocessing, INT8 quantization, TFLite Micro inference, confidence-threshold rejection, and serial output.
 
 ## Evaluation methodology
 
-Full numbers are in `bench/results/`. Headline:
+The headline result is the honest originals-only test, not the augmented file-level test. See [`bench/results/calibration_report.md`](bench/results/calibration_report.md) for the summary and confusion matrices.
 
-```bash
-make eval                                       # INT8 TFLite on originals-only
-make bench-firmware-check                       # F3 regression test
-python python/bench/compare_models.py \
-    --baseline   python/gen/baseline_model.tflite \
-    --challenger python/gen/model.tflite \
-    --report     bench/results/mcnemar_comparison.md
-```
+The key correction was finding **F1**: the on-disk test split contained augmented variants of the same 60 original captures. Those 780 files are useful as an augmentation-robustness panel, but they are not 780 independent test examples. The reported headline therefore uses only the de-contaminated originals-only set: 20 original captures per class, `n=60` total.
 
-| Step | Output |
-|---|---|
-| Calibration vs biased test | `bench/results/calibration_report.md` |
-| Wilson CI / cluster-bootstrap / rejection sweep | `bench/results/stats_summary.md` |
-| Paired head-to-head | `bench/results/mcnemar_comparison.md` |
-| Tuner distillation (30 trials) | `bench/results/tuner_summary.md` |
-| MAC count from TFLite | `bench/results/mac_count.csv` |
-| Embedded footprint (flash/params/arena) | `bench/results/footprint.md` |
-| F3 regression test | `bench/results/firmware_preprocess_check.md` |
-| Report figures | `docs/figures/` |
-| One-page numbers cheat-sheet | `docs/report/results-tables.md` |
-| ML model card | `docs/report/model-card.md` |
-| Live demo / on-device measurement checklist | `docs/report/live-demo-checklist.md` |
+On that honest set the final QAT MobileNetV2 model reaches **98.33% accuracy** and **0.9833 macro-F1**. The only observed error is one `Amine` capture predicted as `Rifki`; `Rifki` and `Jakub` are perfect in the originals-only confusion matrix.
 
-The cleaned test set has **60 captures** (20 per class). Asymptotic chi-square
-McNemar is unsafe at this n, so we use the exact binomial form, and all CIs
-are computed at the capture level. The pre-registered lexicographic decision
-rule is documented in `docs/decision.md`.
+The calibration report also compares the biased full augmented test (`97.69%`, `n=780`) against the honest test (`98.33%`, `n=60`). The difference is small, but the interpretation is very different: the augmented set checks robustness to transformations, while the originals-only set supports statistical claims.
 
-## Design space and trade-offs
+Additional result files include:
 
-The Keras-Tuner ran 30 Hyperband trials over `alpha`, dense width, dropout,
-learning rate, and label smoothing. The full sweep is in
-`bench/results/tuner_{all,top10,pareto,summary}.csv/md`. For a fixed
-target-size budget we picked the smallest `alpha` within 1 pp of the best
-trial:
+- [`bench/results/stats_summary.md`](bench/results/stats_summary.md) for Wilson confidence intervals, cluster bootstrap, and rejection sweep.
+- [`bench/results/rejection_sweep.csv`](bench/results/rejection_sweep.csv) for threshold tradeoffs.
+- [`bench/results/mac_count.csv`](bench/results/mac_count.csv) for compute estimates.
+- [`bench/results/firmware_preprocess_check.md`](bench/results/firmware_preprocess_check.md) for the F3 regression check.
 
-| Knob | Choice | Reason |
-|---|---|---|
-| `alpha` | 0.35 | smallest within 1 pp of the best alpha=0.5 trial |
-| dense head | 32 units | best-in-class trial 0029, also smallest |
-| `IMG_SIZE` | 96 | tightest fit; arena ≈ 1 MB on PSRAM |
-| dropout | 0.4 / 0.1 | regularises the small head |
-| label smoothing | 0.05 | improves rejection calibration |
-| quantization | INT8 QAT | recovers ~1.5 pp over PTQ at the same size |
-| rejection q | 0.77 (softmax) | 100 % accepted accuracy at 96.7 % accept rate |
+## Design space and tradeoffs
+
+The design space is summarized in [`bench/results/tuner_summary.md`](bench/results/tuner_summary.md) and connected to the written report outline in [`docs/report/outline.md`](docs/report/outline.md).
+
+Explored axes included:
+
+| Axis | Values considered | Tradeoff |
+| --- | --- | --- |
+| MobileNetV2 width `alpha` | `{0.35, 0.5, 0.75}` | Accuracy margin vs flash, RAM pressure, and MACs. |
+| Input size `IMG_SIZE` | `{96, 160}` | Face detail vs tensor arena, preprocessing cost, and compute. |
+| Dense head width | `{32, 64, 128}` | Classifier capacity vs parameters and overfitting risk. |
+| Quantization | PTQ and QAT | Conversion simplicity vs INT8 accuracy. |
+| Rejection threshold | `0.80`, `0.85`, `0.90`, `0.95` plus finer sweep | False accept vs false reject. |
+
+The best Keras-Tuner validation trial was `alpha=0.5`, but the smallest model within one percentage point was `alpha=0.35`, dense `32`. The final release picks **MobileNetV2 `alpha=0.35`, `IMG_SIZE=96`, dense `32`** because it is the tightest embedded fit while preserving the honest `98.33%` result and keeping the TFLite artefact to about **662 KB** with about **10.7M MACs**.
 
 ## Known issues / fixed bugs
 
-| Tag | Summary | Status | Commit |
-|---|---|---|---|
-| **F1** | Test split was contaminated with augmented variants of the same originals (260 files but only 20 independent captures per class). | Fixed by `python/bench/build_originals_test.py`; honest n = 60. | `c3174dd` |
-| **F2** | `python/main.py` and `python/qat_export.py` passed `x_test` as `validation_data`, leaking the test set into early stopping and model selection. | Fixed by `python/utils/train_val_split.py`; held-out val drawn from train, grouped by capture id. | `cf02a95` |
-| **F3** | Firmware preprocessor normalised RGB to `[0, 1]` but training used MobileNetV2 `[-1, 1]`, silently shifting the input distribution. | Fixed by replacing `inference.cpp` with the `mobilenet_v2_preprocess` helper; regression test in `python/bench/firmware_preprocess_check.py`. | `ff18dcd` |
-
-A full discussion of how each was caught and fixed is in
-`docs/report/firmware-bug-note.md`.
+| Finding | Description | Commit | Status |
+| --- | --- | --- | --- |
+| F3 — firmware preprocess mismatch | Firmware normalized RGB bytes to `[0,1]`, while training used MobileNetV2 `[-1,1]`; this shifted INT8 input into only the non-negative half of the expected range. | `ff18dcd` | **Fixed**; regression check in `python/bench/firmware_preprocess_check.py`. |
+| F1 — test-set contamination | The test directory contained augmented variants of the same originals, so file-level `n=780` overstated independence. | `c3174dd` | **Fixed** for reporting by evaluating originals-only `n=60`. |
+| F2 — validation/test leak | `python/main.py` and `python/qat_export.py` previously used test data for validation/early stopping. | `cf02a95` | **Fixed** with train-derived validation split and a baseline retrain mitigation. |
 
 ## Citing this work
 
-See [`CITATION.cff`](CITATION.cff). GitHub renders a "Cite this repository"
-button using that file.
+If this repository helps your course project or embedded-ML experiment, please cite it using [`CITATION.cff`](CITATION.cff). GitHub can render that file into BibTeX or APA-style citations from the repository sidebar.
 
 ## License
 
-[MIT](LICENSE). The course project material in `PROJECT.md` belongs to DTU
-and is reproduced for pedagogical context only.
+This project is released under the MIT License. See [`LICENSE`](LICENSE) for the full text.
 
-## Use of generative AI
+## AI usage
 
-Per the course rules, AI was used as an evidence-and-review collaborator
-(rubber-duck reviews, harness scaffolding, report figures). All design
-decisions were made by the team. Full disclosure: [`docs/report/ai-usage.md`](docs/report/ai-usage.md).
+AI tools were used for planning, review, methodology suggestions, evaluation-harness scaffolding, and documentation drafting. They were not used to make the final design decision, collect or label the dataset, or replace human course interpretation. See [`docs/report/ai-usage.md`](docs/report/ai-usage.md) for the full disclosure.
 
 ## Contributors
 
@@ -239,4 +239,12 @@ decisions were made by the team. Full disclosure: [`docs/report/ai-usage.md`](do
 - Rifki
 - Jakub Piotrowski
 
-Contribution guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+## Open-source release notes
+
+The face images in `data/` are private biometric data and are deliberately excluded from git. Reproducing the exact numbers requires the team's private dataset or a consented substitute dataset in the same folder layout.
+
+Generated artefacts in `python/gen/` are ignored by default, with selected release models tracked only when needed for reproducibility. The published evaluation outputs under `bench/results/` are kept so that readers can audit the reported numbers without rerunning the full training pipeline.
+
+Before using this as a template for another face-recognition project, replace the private dataset, rerun the originals-only evaluation, and re-measure latency on the target hardware. Do not publish biometric data without explicit consent and a clear retention policy.
+
+Report artefacts are intentionally stored in small, auditable formats where possible. Large local scratch arrays can be regenerated from the scripts and are not required for a normal clone.
