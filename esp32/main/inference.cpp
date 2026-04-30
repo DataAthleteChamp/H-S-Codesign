@@ -123,14 +123,17 @@ void inference_preprocess(const uint8_t *rgb565_frame)
 
     const int height = input_height();
     const int width = input_width();
+    const int crop_side = FRAME_W < FRAME_H ? FRAME_W : FRAME_H;
+    const int crop_x = (FRAME_W - crop_side) / 2;
+    const int crop_y = (FRAME_H - crop_side) / 2;
 
     for (int r = 0; r < height; r++)
     {
-        const int src_r = r * FRAME_H / height;
+        const int src_r = crop_y + (r * crop_side / height);
 
         for (int c = 0; c < width; c++)
         {
-            const int src_c = c * FRAME_W / width;
+            const int src_c = crop_x + (c * crop_side / width);
             const uint16_t px = read_rgb565_pixel(rgb565_frame, src_r * FRAME_W + src_c);
 
             uint8_t red;

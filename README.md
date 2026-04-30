@@ -42,10 +42,68 @@ To build and flash the ESP32-S3 app from an ESP-IDF shell:
 ```powershell
 cd Project\H-S-Codesign\esp32_camera_classifier
 idf.py set-target esp32s3
-$env:IDF_CCACHE_ENABLE="0"
+idf.py fullclean
 idf.py build
 idf.py flash monitor
 ```
+
+## ESP32 Preview and Prediction Capture
+
+`python/preview_pred.py` previews the live RGB frame stream sent from the ESP32 over USB serial and overlays the latest embedded prediction on the image.
+
+The preview window shows:
+
+- `Best`: the class with the highest score and its percentage.
+- `Prediction`: the final class name when the best score is at least `0.85`; otherwise it shows `Unknown`.
+
+The script also saves one frame and its prediction data every 2 seconds by default. Saved images are written as PNG files, and `frames.csv` stores the metadata for each saved frame.
+
+Install the required Python packages:
+
+```powershell
+python -m pip install -r Project\H-S-Codesign\python\requirements.txt
+```
+
+Run the preview with the default serial port `COM7`:
+
+```powershell
+python Project\H-S-Codesign\python\preview_pred.py
+```
+
+Run with a different port:
+
+```powershell
+python Project\H-S-Codesign\python\preview_pred.py --port COM5
+```
+
+Change the output folder or autosave interval:
+
+```powershell
+python Project\H-S-Codesign\python\preview_pred.py --output-path pred_capture --save-interval 2
+```
+
+Keyboard controls:
+
+- `SPACE`: save the current frame immediately.
+- `r`: toggle timed recording on or off.
+- `s`: send the stream toggle command to the ESP32.
+- `q` or `ESC`: quit the preview.
+
+Output files:
+
+```text
+pred_capture/
+|-- frame_YYYYMMDD_HHMMSS_microseconds.png
+`-- frames.csv
+```
+
+`frames.csv` contains:
+
+```text
+timestamp, filename, label, index, confidence, Amine, Rifki, Jakub
+```
+
+The `label`, `index`, and `confidence` columns come from the ESP32 prediction message. The `Amine`, `Rifki`, and `Jakub` columns contain the raw class scores.
 
 ## Dataset Layout
 
