@@ -85,6 +85,10 @@ stats: venv ## Wilson CI, cluster bootstrap, rejection sweep
 figures: venv ## Regenerate report figures into docs/figures/
 	$(VENV_PY) python/bench/make_figures.py
 
+.PHONY: footprint
+footprint: venv ## Embedded-footprint summary (flash, params, arena) -> bench/results/footprint.{md,csv}
+	$(VENV_PY) python/bench/footprint.py
+
 .PHONY: bench-firmware-check
 bench-firmware-check: venv ## F3 regression test: firmware preprocess matches training
 	$(VENV_PY) python/bench/firmware_preprocess_check.py

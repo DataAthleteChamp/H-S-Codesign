@@ -2,6 +2,16 @@
 
 Target length: 18–25 pages, excluding source-code listings and large appendices. Keep the main text aligned with the DTU 02214 report requirements and move exhaustive tables to appendices.
 
+> **Companion docs already in this repo (don't duplicate; link instead):**
+>
+> - [`docs/report/results-tables.md`](results-tables.md) — every reportable headline number, CI, and p-value in one place.
+> - [`docs/report/model-card.md`](model-card.md) — Mitchell-style model card (intended use, factors, ethics, caveats).
+> - [`docs/report/dataset-datasheet.md`](dataset-datasheet.md) — Gebru-style datasheet for datasets.
+> - [`docs/report/live-demo-checklist.md`](live-demo-checklist.md) — on-device latency capture + real-world demo recipe.
+> - [`docs/report/firmware-bug-note.md`](firmware-bug-note.md) — F3 firmware-preprocess bug write-up.
+> - `bench/results/footprint.md` — flash / parameters / tensor-arena summary.
+> - `docs/figures/f01..f07_*.png` — pre-rendered report figures.
+
 ## 1. Application Description
 
 Purpose: Explain the face-recognition application, why it is suitable for the XIAO ESP32-S3 Sense, and what the system is expected to achieve. This section should make the project scope and success criteria explicit before presenting implementation details.

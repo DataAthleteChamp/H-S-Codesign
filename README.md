@@ -67,8 +67,12 @@ ESP-IDF), and a written design-space / verification report (`docs/report/`).
 │   │   ├── run_baseline_retrain.py    # F2-clean retrain (insurance)
 │   │   ├── distill_tuner.py           # parse Keras-Tuner trials
 │   │   ├── mac_count.py               # MAC count from a TFLite file
+│   │   ├── footprint.py               # flash/params/arena summary
 │   │   ├── make_figures.py            # report figures
 │   │   └── firmware_preprocess_check.py  # F3 regression test
+│   ├── tools/
+│   │   └── serial_latency_logger.py   # parse on-device latency_ms log lines
+│   ├── realworld_webcam_test.py       # desktop webcam proxy test
 │   └── gen/                           # generated artefacts (model.tflite, etc.)
 ├── esp32/
 │   ├── sdkconfig.defaults             # ESP32-S3, PSRAM Octal, large partition
@@ -172,8 +176,12 @@ python python/bench/compare_models.py \
 | Paired head-to-head | `bench/results/mcnemar_comparison.md` |
 | Tuner distillation (30 trials) | `bench/results/tuner_summary.md` |
 | MAC count from TFLite | `bench/results/mac_count.csv` |
+| Embedded footprint (flash/params/arena) | `bench/results/footprint.md` |
 | F3 regression test | `bench/results/firmware_preprocess_check.md` |
 | Report figures | `docs/figures/` |
+| One-page numbers cheat-sheet | `docs/report/results-tables.md` |
+| ML model card | `docs/report/model-card.md` |
+| Live demo / on-device measurement checklist | `docs/report/live-demo-checklist.md` |
 
 The cleaned test set has **60 captures** (20 per class). Asymptotic chi-square
 McNemar is unsafe at this n, so we use the exact binomial form, and all CIs

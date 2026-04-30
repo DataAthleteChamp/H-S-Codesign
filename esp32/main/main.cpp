@@ -7,6 +7,7 @@
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 
 #include "camera.h"
@@ -142,15 +143,18 @@ void loop()
     maybe_handle_serial_command();
 
     // Capture frame
+    const int64_t t_capture_start = esp_timer_get_time();
     if (!camera_capture_frame(frame_buffer))
     {
         ESP_LOGW(TAG, "Frame capture failed, retrying...");
         vTaskDelay(pdMS_TO_TICKS(100));
         return;
     }
+    const int64_t t_capture_end = esp_timer_get_time();
 
     // Preprocess: 320x240 RGB565 -> model-size INT8 RGB888
     inference_preprocess(frame_buffer);
+    const int64_t t_preprocess_end = esp_timer_get_time();
 
     // Run inference
     float prediction[NUM_CLASSES];
@@ -159,6 +163,7 @@ void loop()
         ESP_LOGE(TAG, "Inference failed!");
         return;
     }
+    const int64_t t_inference_end = esp_timer_get_time();
 
     // Find argmax and check confidence
     int best_class = 0;
@@ -185,6 +190,15 @@ void loop()
     // Print all class probabilities
     ESP_LOGI(TAG, "    Amine=%.2f  Rifki=%.2f  Jakub=%.2f",
              prediction[0], prediction[1], prediction[2]);
+
+    // Per-stage and end-to-end latency, machine-parseable for the
+    // python/tools/serial_latency_logger.py replay/serial pipeline.
+    const float capture_ms = (t_capture_end - t_capture_start) / 1000.0f;
+    const float preprocess_ms = (t_preprocess_end - t_capture_end) / 1000.0f;
+    const float inference_ms = (t_inference_end - t_preprocess_end) / 1000.0f;
+    const float latency_ms = (t_inference_end - t_capture_start) / 1000.0f;
+    ESP_LOGI(TAG, "latency_ms=%.2f capture_ms=%.2f preprocess_ms=%.2f inference_ms=%.2f",
+             latency_ms, capture_ms, preprocess_ms, inference_ms);
 
     maybe_stream_rgb888_frame(prediction, best_class, best_conf);
 

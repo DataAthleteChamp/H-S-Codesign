@@ -11,12 +11,14 @@ Figures:
 - f04_rejection.png      rejection-threshold sweep on the existing model
 - f05_tuner_sweep.png    tuner val-accuracy vs alpha (with 1pp Pareto frontier)
 - f06_compare_macroF1.png  per-model macro-F1 with bootstrap CIs
+- f07_training_curves.png  float head-train + QAT loss/accuracy curves
 
 All figures are deterministic and use only matplotlib + numpy.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -233,6 +235,73 @@ def fig_compare() -> None:
     _save(fig, "f06_compare_macroF1.png")
 
 
+def fig_training_curves() -> None:
+    history_path = RESULTS / "baseline_training_history_seed42.json"
+    if not history_path.exists():
+        print(f"  skipping training curves: {history_path.name} not found")
+        return
+
+    with history_path.open() as fh:
+        history = json.load(fh)
+
+    float_h = history.get("float", {})
+    qat_h = history.get("qat", {})
+    if not (float_h and qat_h):
+        print("  skipping training curves: history missing float/qat phases")
+        return
+
+    n_float = len(float_h.get("loss", []))
+    n_qat = len(qat_h.get("loss", []))
+    if n_float == 0 or n_qat == 0:
+        print("  skipping training curves: empty history arrays")
+        return
+
+    epochs_float = np.arange(1, n_float + 1)
+    epochs_qat = np.arange(n_float + 1, n_float + n_qat + 1)
+    boundary = n_float + 0.5
+
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.0))
+
+    ax_loss = axes[0]
+    ax_loss.plot(epochs_float, float_h["loss"], "-o", color="#3e7cb1",
+                 label="train loss (float head)", markersize=3)
+    ax_loss.plot(epochs_float, float_h["val_loss"], "--o", color="#3e7cb1",
+                 label="val loss (float head)", markersize=3, alpha=0.7)
+    ax_loss.plot(epochs_qat, qat_h["loss"], "-s", color="#c0392b",
+                 label="train loss (QAT)", markersize=3)
+    ax_loss.plot(epochs_qat, qat_h["val_loss"], "--s", color="#c0392b",
+                 label="val loss (QAT)", markersize=3, alpha=0.7)
+    ax_loss.axvline(boundary, color="#888", linestyle=":", linewidth=1)
+    ax_loss.set_xlabel("epoch")
+    ax_loss.set_ylabel("loss")
+    ax_loss.set_title("Loss")
+    ax_loss.legend(fontsize=8, loc="upper right")
+
+    ax_acc = axes[1]
+    ax_acc.plot(epochs_float, float_h["accuracy"], "-o", color="#3e7cb1",
+                label="train acc (float head)", markersize=3)
+    ax_acc.plot(epochs_float, float_h["val_accuracy"], "--o", color="#3e7cb1",
+                label="val acc (float head)", markersize=3, alpha=0.7)
+    ax_acc.plot(epochs_qat, qat_h["accuracy"], "-s", color="#c0392b",
+                label="train acc (QAT)", markersize=3)
+    ax_acc.plot(epochs_qat, qat_h["val_accuracy"], "--s", color="#c0392b",
+                label="val acc (QAT)", markersize=3, alpha=0.7)
+    ax_acc.axvline(boundary, color="#888", linestyle=":", linewidth=1)
+    ax_acc.set_xlabel("epoch")
+    ax_acc.set_ylabel("accuracy")
+    ax_acc.set_ylim(0.6, 1.02)
+    ax_acc.set_title("Accuracy")
+    ax_acc.legend(fontsize=8, loc="lower right")
+
+    fig.suptitle(
+        f"Training curves (seed={history.get('config', {}).get('seed', '?')}; "
+        f"{n_float} float-head epochs + {n_qat} QAT epochs)",
+        fontsize=10,
+    )
+    fig.tight_layout()
+    _save(fig, "f07_training_curves.png")
+
+
 def main() -> int:
     fig_dataspace()
     fig_calibration()
@@ -240,6 +309,7 @@ def main() -> int:
     fig_rejection()
     fig_tuner()
     fig_compare()
+    fig_training_curves()
     print(f"All figures written under {FIGS.relative_to(ROOT)}")
     return 0
 
