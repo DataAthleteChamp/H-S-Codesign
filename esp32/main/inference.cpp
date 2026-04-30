@@ -1,14 +1,15 @@
-#include <cstdint>
 #include <cmath>
-#include "esp_log.h"
+#include <cstdint>
+
 #include "esp_heap_caps.h"
-#include "model.h"
+#include "esp_log.h"
+
 #include "camera.h"
+#include "model.h"
 
-#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 #include "tensorflow/lite/micro/micro_interpreter.h"
+#include "tensorflow/lite/micro/micro_mutable_op_resolver.h"
 
-// Tensor arena size — MobileNetV2 alpha=0.35 at 96×96 needs ~1 MB
 #define TENSOR_ARENA_SIZE (1024 * 1024)
 
 static const tflite::Model *model = nullptr;
@@ -18,9 +19,43 @@ static TfLiteTensor *input = nullptr;
 static TfLiteTensor *output = nullptr;
 static const char *TAG = "Inference";
 
+static inline int8_t quantize_to_int8(float value, float scale, int32_t zero_point)
+{
+    const float q = roundf(value / scale) + static_cast<float>(zero_point);
+    return static_cast<int8_t>(fminf(127.0f, fmaxf(-128.0f, q)));
+}
+
+static inline uint16_t read_rgb565_pixel(const uint8_t *rgb565_frame, int pixel_index)
+{
+    const int src_idx = pixel_index * 2;
+    return (static_cast<uint16_t>(rgb565_frame[src_idx]) << 8)
+           | static_cast<uint16_t>(rgb565_frame[src_idx + 1]);
+}
+
+static inline void rgb565_to_rgb888(uint16_t px, uint8_t &red, uint8_t &green, uint8_t &blue)
+{
+    red = static_cast<uint8_t>(((px >> 11) & 0x1F) * 255 / 31);
+    green = static_cast<uint8_t>(((px >> 5) & 0x3F) * 255 / 63);
+    blue = static_cast<uint8_t>((px & 0x1F) * 255 / 31);
+}
+
+static inline float mobilenet_v2_preprocess(uint8_t pixel)
+{
+    return (static_cast<float>(pixel) / 127.5f) - 1.0f;
+}
+
+static inline int input_height()
+{
+    return input->dims->data[1];
+}
+
+static inline int input_width()
+{
+    return input->dims->data[2];
+}
+
 bool inference_init()
 {
-    // Load TFLite model from flash
     model = tflite::GetModel(model_binary);
     if (model->version() != TFLITE_SCHEMA_VERSION)
     {
@@ -29,8 +64,7 @@ bool inference_init()
         return false;
     }
 
-    // Allocate tensor arena in PSRAM
-    tensor_arena = (uint8_t *)heap_caps_malloc(TENSOR_ARENA_SIZE, MALLOC_CAP_SPIRAM);
+    tensor_arena = static_cast<uint8_t *>(heap_caps_malloc(TENSOR_ARENA_SIZE, MALLOC_CAP_SPIRAM));
     if (!tensor_arena)
     {
         ESP_LOGE(TAG, "Failed to allocate tensor arena in PSRAM!");
@@ -38,7 +72,6 @@ bool inference_init()
     }
     ESP_LOGI(TAG, "Tensor arena allocated: %d bytes in PSRAM", TENSOR_ARENA_SIZE);
 
-    // MobileNetV2 op resolver
     static tflite::MicroMutableOpResolver<10> resolver;
     resolver.AddConv2D();
     resolver.AddDepthwiseConv2D();
@@ -51,7 +84,6 @@ bool inference_init()
     resolver.AddQuantize();
     resolver.AddDequantize();
 
-    // Create interpreter
     static tflite::MicroInterpreter static_interpreter(
         model, resolver, tensor_arena, TENSOR_ARENA_SIZE);
     interpreter = &static_interpreter;
@@ -77,52 +109,46 @@ bool inference_init()
     return true;
 }
 
-/**
- * Preprocess a 320×240 RGB565 frame into the model's 96×96 INT8 input tensor.
- * Steps: center-crop to 240×240, nearest-neighbor scale to 96×96,
- * convert RGB565→RGB888, normalize to [0,1], quantize to INT8.
- */
 void inference_preprocess(const uint8_t *rgb565_frame)
 {
+    if (input->type != kTfLiteInt8)
+    {
+        ESP_LOGE(TAG, "Expected int8 input tensor, got %s", TfLiteTypeGetName(input->type));
+        return;
+    }
+
     int8_t *dst = input->data.int8;
-    const int crop_x = (FRAME_W - FRAME_H) / 2; // 40 pixels from each side
     const float scale = input->params.scale;
     const int32_t zp = input->params.zero_point;
 
-    for (int r = 0; r < IMG_SIZE; r++)
+    const int height = input_height();
+    const int width = input_width();
+    const int crop_side = FRAME_W < FRAME_H ? FRAME_W : FRAME_H;
+    const int crop_x = (FRAME_W - crop_side) / 2;
+    const int crop_y = (FRAME_H - crop_side) / 2;
+
+    for (int r = 0; r < height; r++)
     {
-        // Source row in 240×240 crop
-        int src_r = r * FRAME_H / IMG_SIZE;
+        const int src_r = crop_y + (r * crop_side / height);
 
-        for (int c = 0; c < IMG_SIZE; c++)
+        for (int c = 0; c < width; c++)
         {
-            // Source col (offset by crop)
-            int src_c = c * FRAME_H / IMG_SIZE + crop_x;
+            const int src_c = crop_x + (c * crop_side / width);
+            const uint16_t px = read_rgb565_pixel(rgb565_frame, src_r * FRAME_W + src_c);
 
-            // Read RGB565 pixel (2 bytes, big-endian from camera)
-            int src_idx = (src_r * FRAME_W + src_c) * 2;
-            uint16_t px = ((uint16_t)rgb565_frame[src_idx] << 8) | rgb565_frame[src_idx + 1];
+            uint8_t red;
+            uint8_t green;
+            uint8_t blue;
+            rgb565_to_rgb888(px, red, green, blue);
 
-            // Extract RGB components and scale to 0-255
-            uint8_t red   = (px >> 11) << 3;
-            uint8_t green = ((px >> 5) & 0x3F) << 2;
-            uint8_t blue  = (px & 0x1F) << 3;
-
-            // Normalize to [0,1] then quantize to INT8 using runtime params
-            int dst_idx = (r * IMG_SIZE + c) * 3;
-            dst[dst_idx + 0] = (int8_t)fminf(127.0f, fmaxf(-128.0f,
-                roundf((red   / 255.0f) / scale + zp)));
-            dst[dst_idx + 1] = (int8_t)fminf(127.0f, fmaxf(-128.0f,
-                roundf((green / 255.0f) / scale + zp)));
-            dst[dst_idx + 2] = (int8_t)fminf(127.0f, fmaxf(-128.0f,
-                roundf((blue  / 255.0f) / scale + zp)));
+            const int dst_idx = (r * width + c) * 3;
+            dst[dst_idx + 0] = quantize_to_int8(mobilenet_v2_preprocess(red), scale, zp);
+            dst[dst_idx + 1] = quantize_to_int8(mobilenet_v2_preprocess(green), scale, zp);
+            dst[dst_idx + 2] = quantize_to_int8(mobilenet_v2_preprocess(blue), scale, zp);
         }
     }
 }
 
-/**
- * Run inference and dequantize the output to float probabilities.
- */
 bool inference_predict(float *prediction)
 {
     if (interpreter->Invoke() != kTfLiteOk)
@@ -131,11 +157,25 @@ bool inference_predict(float *prediction)
         return false;
     }
 
-    for (int i = 0; i < NUM_CLASSES; i++)
+    if (output->type == kTfLiteInt8)
     {
-        prediction[i] = (static_cast<float>(output->data.int8[i]) - output->params.zero_point)
-                         * output->params.scale;
+        for (int i = 0; i < NUM_CLASSES; i++)
+        {
+            prediction[i] = (static_cast<float>(output->data.int8[i]) - output->params.zero_point)
+                             * output->params.scale;
+        }
+        return true;
     }
 
-    return true;
+    if (output->type == kTfLiteFloat32)
+    {
+        for (int i = 0; i < NUM_CLASSES; i++)
+        {
+            prediction[i] = output->data.f[i];
+        }
+        return true;
+    }
+
+    ESP_LOGE(TAG, "Unsupported output tensor type: %s", TfLiteTypeGetName(output->type));
+    return false;
 }
