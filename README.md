@@ -22,20 +22,18 @@ This project has three main stages: training a 3-class MobileNetV2 model in Kera
 - It loads `x_train.npy` as the representative calibration dataset.
 - It converts the model to fully INT8 TensorFlow Lite format.
 - It exports:
-  - `python/gen/model.tflite`
-  - `python/gen/model.c`
-  - `python/gen/model.h`
+  - `python/quantized_model/model.tflite`
+  - `python/quantized_model/model.c`
+  - `python/`quantized_model `/model.h`
 - It then evaluates the quantized TFLite model on the cached test data to verify the exported model still performs correctly.
 
 ## ESP32 Program
 
-`esp32_camera_classifier/` is the embedded deployment target for the quantized model.
+`esp32/` is the embedded deployment target for the quantized model.
 
-- `esp32_camera_classifier/main/main.cpp` captures camera frames on the ESP32-S3, center-crops the frame, resizes it to the model input size, applies MobileNetV2-style preprocessing, and sends the result to the inference code.
-- `esp32_camera_classifier/main/inference.cpp` loads `model.c` and `model.h` with TensorFlow Lite Micro, quantizes the input to `int8`, runs inference, and converts the output back to floating-point scores.
-- The ESP32 firmware expects the generated model files from `python/gen/`.
-- The current embedded pipeline performs classification on the center crop of the camera frame. It does not run face detection on-device.
-- PSRAM is used for the frame buffer and tensor arena, and the partition table is enlarged so the firmware can include the model binary.
+- `esp32/main/main.cpp` captures camera frames on the ESP32-S3, center-crops the frame, resizes it to the model input size, applies MobileNetV2-style preprocessing, and sends the result to the inference code.
+- `esp32/main/inference.cpp` loads `model.c` and `model.h` with TensorFlow Lite Micro, quantizes the input to `int8`, runs inference, and converts the output back to floating-point scores.
+- The ESP32 firmware expects the generated model files from `python/quantized_model/`.
 
 To build and flash the ESP32-S3 app from an ESP-IDF shell:
 
@@ -44,7 +42,7 @@ cd Project\H-S-Codesign\esp32_camera_classifier
 idf.py set-target esp32s3
 idf.py fullclean
 idf.py build
-idf.py flash monitor
+idf.py -p <PORT> flash
 ```
 
 ## ESP32 Preview and Prediction Capture
@@ -61,25 +59,19 @@ The script also saves one frame and its prediction data every 2 seconds by defau
 Install the required Python packages:
 
 ```powershell
-python -m pip install -r Project\H-S-Codesign\python\requirements.txt
+python -m pip install -r python\requirements.txt
 ```
 
 Run the preview with the default serial port `COM7`:
 
 ```powershell
-python Project\H-S-Codesign\python\preview_pred.py
+python python\preview_pred.py
 ```
 
 Run with a different port:
 
 ```powershell
-python Project\H-S-Codesign\python\preview_pred.py --port COM5
-```
-
-Change the output folder or autosave interval:
-
-```powershell
-python Project\H-S-Codesign\python\preview_pred.py --output-path pred_capture --save-interval 2
+python python\preview_pred.py --port COM5
 ```
 
 Keyboard controls:
