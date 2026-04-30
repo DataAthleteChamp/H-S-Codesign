@@ -89,7 +89,7 @@ def _prepare_interpreter(
         fixed_bad = [
             idx
             for idx, (cur, want, sig) in enumerate(
-                zip(current_shape, wanted_shape, shape_signature)
+                zip(current_shape, wanted_shape, shape_signature, strict=True)
             )
             if cur != want and sig != -1
         ]

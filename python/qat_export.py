@@ -222,7 +222,6 @@ def main():
     y_pred_int = np.argmax(y_pred_float, axis=1)
     accuracy = np.mean(y_pred_int == y_test)
 
-    class_labels = [name for name, _ in sorted(LABELS.items(), key=lambda x: x[1])]
     print(f'QAT TFLite accuracy: {accuracy:.4f}  (PTQ was: 0.8551)')
     print()
 

@@ -6,14 +6,13 @@ for face recognition accuracy on the ESP32-S3.
 """
 
 import os
-import numpy as np
 import tensorflow as tf
 import keras
 import keras_tuner as kt
 from keras.layers import Dense, Dropout, GlobalAveragePooling2D
 from keras.applications import MobileNetV2
 
-from preprocess import IMG_SIZE, NUM_CLASSES, LABELS
+from preprocess import IMG_SIZE, NUM_CLASSES
 from main import preprocess_and_load_data
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'

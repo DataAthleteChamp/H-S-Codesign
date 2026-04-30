@@ -112,12 +112,17 @@ def _ece(confidence: np.ndarray, correct: np.ndarray, n_bins: int = 10) -> float
     return float(ece)
 
 
+DEFAULT_REJECTION_THRESHOLDS = np.linspace(0.0, 0.99, 100)
+
+
 def rejection_sweep(
     softmax_probs: np.ndarray,
     y_true: np.ndarray,
-    thresholds: np.ndarray = np.linspace(0.0, 0.99, 100),
+    thresholds: np.ndarray | None = None,
 ) -> np.ndarray:
     """Return a structured table for confidence-threshold rejection analysis."""
+    if thresholds is None:
+        thresholds = DEFAULT_REJECTION_THRESHOLDS
     probs = np.asarray(softmax_probs, dtype=np.float64)
     y_true = np.asarray(y_true).reshape(-1)
     thresholds = np.asarray(thresholds, dtype=np.float64).reshape(-1)

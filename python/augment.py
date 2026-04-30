@@ -8,7 +8,6 @@ and applies 12 augmentations (8 single + 4 combined) per image. Idempotent — s
 import os
 from typing import Tuple
 import cv2
-import numpy as np
 import albumentations as A
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')

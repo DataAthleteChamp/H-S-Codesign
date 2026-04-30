@@ -265,7 +265,7 @@ def export_int8_tflite(
     declarations = [
         f"// Labels: {', '.join(f'{name}={idx}' for name, idx in sorted(LABELS.items(), key=lambda item: item[1]))}",
         "// Quantization method: QAT + INT8 TFLite conversion",
-        f"// Clean train/val split seed: 42",
+        "// Clean train/val split seed: 42",
         f"// Alpha (depth multiplier): {ALPHA}",
         f"// Dense units: {DENSE_UNITS}",
         f"// Dropout: {DROPOUT_1}/{DROPOUT_2}",

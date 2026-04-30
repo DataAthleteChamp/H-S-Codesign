@@ -6,7 +6,6 @@ for the report's design-space analysis section.
 """
 
 import os
-import sys
 import numpy as np
 import tensorflow as tf
 import keras
@@ -14,11 +13,9 @@ import keras
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 tf.get_logger().setLevel('ERROR')
 
-from preprocess import IMG_SIZE, NUM_CLASSES, LABELS
+from preprocess import IMG_SIZE, NUM_CLASSES
 from main import (preprocess_and_load_data, build_model, train_model,
-                  train_model_qat, export_model_to_tflite,
-                  evaluate_with_rejection)
-from utils.eval_utils import compute_precision_recall_f1
+                  train_model_qat, export_model_to_tflite)
 
 GEN_DIR = os.path.join(os.path.dirname(__file__), 'gen')
 
@@ -57,7 +54,6 @@ def run_experiment(config: dict, x_train, y_train, x_test, y_test) -> dict:
     y_test_cat = keras.utils.to_categorical(y_test, NUM_CLASSES)
     _, keras_acc = model.evaluate(x_test, y_test_cat, verbose=0)
     y_pred = model.predict(x_test, verbose=0)
-    y_pred_int = np.argmax(y_pred, axis=1)
 
     # Optional QAT
     export_model = model

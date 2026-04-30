@@ -1,4 +1,4 @@
-# Head-to-head: `baseline_F2_clean` vs `existing_QAT`
+# Head-to-head: `baseline_model` vs `model`
 
 - Test set: 60 originals-only captures (cleaned of augmented variants).
 - Predictions, capture-level pairing.
@@ -8,18 +8,18 @@
 
 | model | correct/n | accuracy | Wilson 95% CI | macro-F1 | bootstrap macro-F1 95% CI |
 |---|---:|---:|---|---:|---|
-| baseline_F2_clean | 56/60 | 93.33% | [84.07%, 97.38%] | 0.9329 | [0.8602, 0.9842] |
-| existing_QAT | 59/60 | 98.33% | [91.14%, 99.71%] | 0.9833 | [0.9433, 1.0000] |
+| baseline_model | 56/60 | 93.33% | [84.07%, 97.38%] | 0.9329 | [0.8602, 0.9842] |
+| model | 59/60 | 98.33% | [91.14%, 99.71%] | 0.9833 | [0.9433, 1.0000] |
 
 Δaccuracy = +5.00 pp
 Δmacro-F1 = +0.0504
 
 ## Paired McNemar table (capture-level)
 
-|  | existing_QAT correct | existing_QAT wrong |
+|  | model correct | model wrong |
 |---|---:|---:|
-| baseline_F2_clean correct | a = 56 | b = 0 |
-| baseline_F2_clean wrong | c = 3 | d = 1 |
+| baseline_model correct | a = 56 | b = 0 |
+| baseline_model wrong | c = 3 | d = 1 |
 
 Discordant pairs: b + c = 3
 Exact two-sided McNemar p-value: **0.2500**

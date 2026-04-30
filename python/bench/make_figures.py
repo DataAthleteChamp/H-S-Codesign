@@ -77,7 +77,7 @@ def fig_dataspace() -> None:
     ax.set_ylabel("number of files")
     ax.set_title("Dataset composition per class")
     ax.legend()
-    for xi, t, e, o in zip(x, train_total, test_total, test_originals):
+    for xi, t, e, o in zip(x, train_total, test_total, test_originals, strict=True):
         ax.text(xi - width, t + 5, str(t), ha="center", fontsize=9)
         ax.text(xi, e + 5, str(e), ha="center", fontsize=9)
         ax.text(xi + width, o + 5, str(o), ha="center", fontsize=9)
@@ -93,7 +93,7 @@ def fig_calibration() -> None:
     ax.set_ylim(0.9, 1.0)
     ax.set_ylabel("accuracy")
     ax.set_title("Calibration: existing model on biased vs honest test")
-    for bar, val in zip(bars, [0.9769, 0.9833]):
+    for bar, val in zip(bars, [0.9769, 0.9833], strict=True):
         ax.text(bar.get_x() + bar.get_width() / 2, val + 0.0008,
                 f"{val*100:.2f}%", ha="center", fontsize=10)
     ax.text(0.5, 0.91,
@@ -113,7 +113,7 @@ def fig_confusion() -> None:
     y_pred = np.asarray(data["predictions"]).astype(int).reshape(-1)
 
     cm_existing = np.zeros((3, 3), dtype=int)
-    for t, p in zip(y_true, y_pred):
+    for t, p in zip(y_true, y_pred, strict=True):
         cm_existing[t, p] += 1
 
     baseline_cm_path = RESULTS / "baseline_originals_test.npz"
@@ -122,7 +122,7 @@ def fig_confusion() -> None:
         b_true = np.asarray(bdata["labels"]).astype(int).reshape(-1)
         b_pred = np.asarray(bdata["predictions"]).astype(int).reshape(-1)
         cm_baseline = np.zeros((3, 3), dtype=int)
-        for t, p in zip(b_true, b_pred):
+        for t, p in zip(b_true, b_pred, strict=True):
             cm_baseline[t, p] += 1
     else:
         cm_baseline = None
@@ -225,7 +225,7 @@ def fig_compare() -> None:
     ax.set_ylim(0.80, 1.02)
     ax.set_ylabel("macro-F1")
     ax.set_title("Head-to-head on n=60 honest captures (cluster bootstrap 95% CI)")
-    for bar, v in zip(bars, f1):
+    for bar, v in zip(bars, f1, strict=True):
         ax.text(bar.get_x() + bar.get_width() / 2, v + 0.005,
                 f"{v:.4f}", ha="center", fontsize=10)
     ax.text(0.5, -0.18, "Exact McNemar p = 0.25 (not significant at alpha=0.05)",
