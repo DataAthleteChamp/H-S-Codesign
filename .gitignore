@@ -3,6 +3,7 @@ data/
 
 # Generated outputs (model files, .npy arrays, C exports)
 python/gen/
+bench/results/
 
 # Python
 __pycache__/
