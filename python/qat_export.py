@@ -19,6 +19,9 @@ tf.get_logger().setLevel('ERROR')
 import tf_keras as keras
 import tensorflow_model_optimization as tfmot
 
+from utils.train_val_split import split_train_for_validation
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 GEN_DIR = os.path.join(os.path.dirname(__file__), 'gen')
 IMG_SIZE = 96
 NUM_CLASSES = 3
@@ -30,6 +33,8 @@ FINE_TUNE_LAYERS = 20
 DENSE_UNITS = 32
 DROPOUT_1 = 0.4
 DROPOUT_2 = 0.1
+SEED = 42
+VAL_FRACTION = 0.15
 
 
 def load_data():
@@ -72,9 +77,15 @@ def main():
 
     print('Loading data...')
     x_train, y_train, x_test, y_test = load_data()
-    y_train_cat = keras.utils.to_categorical(y_train, NUM_CLASSES)
+    x_fit, y_fit, x_val, y_val, split_info = split_train_for_validation(
+        x_train, y_train, DATA_DIR, GEN_DIR, LABELS,
+        val_fraction=VAL_FRACTION, seed=SEED
+    )
+    y_fit_cat = keras.utils.to_categorical(y_fit, NUM_CLASSES)
+    y_val_cat = keras.utils.to_categorical(y_val, NUM_CLASSES)
     y_test_cat = keras.utils.to_categorical(y_test, NUM_CLASSES)
-    print(f'Train: {x_train.shape}, Test: {x_test.shape}')
+    print(f'Train cache: {x_train.shape}, Train: {x_fit.shape}, Val: {x_val.shape}, Test: {x_test.shape}')
+    print(f'Val split manifest: {split_info["split_path"]}')
 
     # Build and train with legacy Keras (two-phase transfer learning)
     print('\n=== Phase 1: Feature extraction (frozen base) ===')
@@ -89,8 +100,8 @@ def main():
         metrics=['accuracy']
     )
 
-    model.fit(x_train, y_train_cat, epochs=20, batch_size=32,
-              validation_data=(x_test, y_test_cat),
+    model.fit(x_fit, y_fit_cat, epochs=20, batch_size=32,
+              validation_data=(x_val, y_val_cat),
               callbacks=[keras.callbacks.EarlyStopping(
                   monitor='val_loss', patience=10, restore_best_weights=True)])
 
@@ -107,8 +118,8 @@ def main():
         metrics=['accuracy']
     )
 
-    model.fit(x_train, y_train_cat, epochs=50, batch_size=32,
-              validation_data=(x_test, y_test_cat),
+    model.fit(x_fit, y_fit_cat, epochs=50, batch_size=32,
+              validation_data=(x_val, y_val_cat),
               callbacks=[keras.callbacks.EarlyStopping(
                   monitor='val_loss', patience=10, restore_best_weights=True)])
 
@@ -125,10 +136,10 @@ def main():
     )
 
     qat_model.fit(
-        x_train, y_train_cat,
+        x_fit, y_fit_cat,
         epochs=10,
         batch_size=32,
-        validation_data=(x_test, y_test_cat),
+        validation_data=(x_val, y_val_cat),
         callbacks=[keras.callbacks.EarlyStopping(
             monitor='val_loss', patience=5, restore_best_weights=True)]
     )
@@ -142,8 +153,8 @@ def main():
     converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
     def representative_dataset():
-        for i in range(len(x_train)):
-            yield [x_train[i:i + 1].astype(np.float32)]
+        for i in range(len(x_fit)):
+            yield [x_fit[i:i + 1].astype(np.float32)]
     converter.representative_dataset = representative_dataset
 
     converter.target_spec.supported_ops = [tf.lite.OpsSet.TFLITE_BUILTINS_INT8]

@@ -1,0 +1,2 @@
+trial_id,score,alpha,dense_units,dropout_1,dropout_2,learning_rate,label_smoothing,tuner_bracket,tuner_round,tuner_epochs,tuner_initial_epoch,best_step
+0029,0.964102566242218,0.35,32,0.4,0.1,0.0005,0.05,0,0,20,0,2

@@ -1,9 +1,19 @@
 # User images (private, large)
 data/
 
-# Generated outputs (model files, .npy arrays, C exports)
-python/gen/
-bench/results/
+# Generated outputs - keep model artifacts, ignore caches and large arrays
+python/gen/cache/
+python/gen/tuner/
+python/gen/__pycache__/
+python/gen/*.npy
+python/gen/x_*.npy
+python/gen/y_*.npy
+python/gen/baseline_smoke_*
+python/gen/model.c
+python/gen/model.keras
+
+# Bench results - keep markdown/csv/json/png reports, ignore large arrays
+bench/results/*.npy
 
 # Python
 __pycache__/

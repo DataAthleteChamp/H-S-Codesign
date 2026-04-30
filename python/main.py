@@ -15,6 +15,7 @@ from keras.applications import MobileNetV2
 from preprocess import preprocess_all, IMG_SIZE, NUM_CLASSES, LABELS
 from utils.export_tflite import write_model_h_file, write_model_c_file
 from utils.eval_utils import compute_precision_recall_f1, print_confusion_matrix
+from utils.train_val_split import split_train_for_validation
 
 # Minimize TensorFlow logging
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -25,6 +26,8 @@ GEN_DIR = os.path.join(os.path.dirname(__file__), 'gen')
 MODEL_C_PATH = os.path.join(GEN_DIR, 'model.c')
 MODEL_H_PATH = os.path.join(GEN_DIR, 'model.h')
 USE_CACHED_DATA = True
+SEED = 42
+VAL_FRACTION = 0.15
 
 # --- Design space parameters ---
 ALPHA = 0.35                # MobileNetV2 depth multiplier (0.25/0.35/0.5/1.0)
@@ -89,7 +92,7 @@ def build_model(alpha: float = ALPHA,
 
 
 def train_model(x_train: np.ndarray, y_train: np.ndarray,
-                x_test: np.ndarray, y_test: np.ndarray,
+                x_val: np.ndarray, y_val: np.ndarray,
                 label_smoothing: float = LABEL_SMOOTHING,
                 fine_tune_layers: int = FINE_TUNE_LAYERS) -> keras.Model:
     """Two-phase transfer learning training with label smoothing."""
@@ -101,7 +104,7 @@ def train_model(x_train: np.ndarray, y_train: np.ndarray,
 
     # Convert labels to one-hot for label smoothing
     y_train_cat = keras.utils.to_categorical(y_train, NUM_CLASSES)
-    y_test_cat = keras.utils.to_categorical(y_test, NUM_CLASSES)
+    y_val_cat = keras.utils.to_categorical(y_val, NUM_CLASSES)
 
     # --- Phase 1: Feature extraction (frozen base) ---
     print('Phase 1: Training classification head (base frozen)...')
@@ -125,7 +128,7 @@ def train_model(x_train: np.ndarray, y_train: np.ndarray,
         x_train, y_train_cat,
         epochs=20,
         batch_size=32,
-        validation_data=(x_test, y_test_cat),
+        validation_data=(x_val, y_val_cat),
         callbacks=[early_stopping, model_checkpoint]
     )
 
@@ -159,7 +162,7 @@ def train_model(x_train: np.ndarray, y_train: np.ndarray,
         x_train, y_train_cat,
         epochs=50,
         batch_size=32,
-        validation_data=(x_test, y_test_cat),
+        validation_data=(x_val, y_val_cat),
         callbacks=[early_stopping, model_checkpoint]
     )
 
@@ -170,7 +173,7 @@ def train_model(x_train: np.ndarray, y_train: np.ndarray,
 
 def train_model_qat(model: keras.Model,
                     x_train: np.ndarray, y_train: np.ndarray,
-                    x_test: np.ndarray, y_test: np.ndarray,
+                    x_val: np.ndarray, y_val: np.ndarray,
                     label_smoothing: float = LABEL_SMOOTHING) -> keras.Model:
     """Phase 3: Quantization-Aware Training for better INT8 accuracy."""
     import tensorflow_model_optimization as tfmot
@@ -183,7 +186,7 @@ def train_model_qat(model: keras.Model,
     qat_model = tfmot.quantization.keras.quantize_model(model)
 
     y_train_cat = keras.utils.to_categorical(y_train, NUM_CLASSES)
-    y_test_cat = keras.utils.to_categorical(y_test, NUM_CLASSES)
+    y_val_cat = keras.utils.to_categorical(y_val, NUM_CLASSES)
 
     qat_model.compile(
         optimizer=keras.optimizers.Adam(learning_rate=1e-5),
@@ -202,7 +205,7 @@ def train_model_qat(model: keras.Model,
         x_train, y_train_cat,
         epochs=10,
         batch_size=32,
-        validation_data=(x_test, y_test_cat),
+        validation_data=(x_val, y_val_cat),
         callbacks=[early_stopping, model_checkpoint]
     )
 
@@ -403,11 +406,18 @@ if __name__ == '__main__':
     # Load data
     print('Loading data...')
     x_train, y_train, x_test, y_test = preprocess_and_load_data()
-    print(f'Train: {x_train.shape}, Test: {x_test.shape}')
+    print(f'Train cache: {x_train.shape}, Test: {x_test.shape}')
+
+    x_fit, y_fit, x_val, y_val, split_info = split_train_for_validation(
+        x_train, y_train, DATA_DIR, GEN_DIR, LABELS,
+        val_fraction=VAL_FRACTION, seed=SEED
+    )
+    print(f'Train/val split: train={x_fit.shape}, val={x_val.shape}')
+    print(f'Val split manifest: {split_info["split_path"]}')
     print()
 
     # Train model (Phase 1 + Phase 2)
-    model = train_model(x_train, y_train, x_test, y_test)
+    model = train_model(x_fit, y_fit, x_val, y_val)
 
     # Evaluate Keras model
     print()
@@ -419,7 +429,7 @@ if __name__ == '__main__':
     is_qat = False
     if USE_QAT:
         try:
-            qat_model = train_model_qat(model, x_train, y_train, x_test, y_test)
+            qat_model = train_model_qat(model, x_fit, y_fit, x_val, y_val)
             print()
             print('=== QAT Model Evaluation ===')
             evaluate_model(qat_model, x_test, y_test)
@@ -431,7 +441,7 @@ if __name__ == '__main__':
             print('This is expected with Keras 3.x / TF 2.21+.')
 
     # Export to TFLite
-    tflite_model = export_model_to_tflite(export_model, x_train, is_qat=is_qat)
+    tflite_model = export_model_to_tflite(export_model, x_fit, is_qat=is_qat)
 
     # Evaluate TFLite model
     print()
