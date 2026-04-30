@@ -202,9 +202,9 @@ trial:
 
 | Tag | Summary | Status | Commit |
 |---|---|---|---|
-| **F1** | Test split was contaminated with augmented variants of the same originals (260 files but only 20 independent captures per class). | Fixed by `python/bench/build_originals_test.py`; honest n = 60. | `a55638d` |
-| **F2** | `python/main.py` and `python/qat_export.py` passed `x_test` as `validation_data`, leaking the test set into early stopping and model selection. | Fixed by `python/utils/train_val_split.py`; held-out val drawn from train, grouped by capture id. | `750aa2a` |
-| **F3** | Firmware preprocessor normalised RGB to `[0, 1]` but training used MobileNetV2 `[-1, 1]`, silently shifting the input distribution. | Fixed by replacing `inference.cpp` with the `mobilenet_v2_preprocess` helper; regression test in `python/bench/firmware_preprocess_check.py`. | `2c833e6` |
+| **F1** | Test split was contaminated with augmented variants of the same originals (260 files but only 20 independent captures per class). | Fixed by `python/bench/build_originals_test.py`; honest n = 60. | `c3174dd` |
+| **F2** | `python/main.py` and `python/qat_export.py` passed `x_test` as `validation_data`, leaking the test set into early stopping and model selection. | Fixed by `python/utils/train_val_split.py`; held-out val drawn from train, grouped by capture id. | `cf02a95` |
+| **F3** | Firmware preprocessor normalised RGB to `[0, 1]` but training used MobileNetV2 `[-1, 1]`, silently shifting the input distribution. | Fixed by replacing `inference.cpp` with the `mobilenet_v2_preprocess` helper; regression test in `python/bench/firmware_preprocess_check.py`. | `ff18dcd` |
 
 A full discussion of how each was caught and fixed is in
 `docs/report/firmware-bug-note.md`.

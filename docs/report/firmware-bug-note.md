@@ -62,7 +62,7 @@ static inline int8_t mobilenet_v2_preprocess(uint8_t channel) {
 ```
 
 The helper is now used by every call site in `esp32/main/inference.cpp`
-(see commit `2c833e6`).
+(see commit `ff18dcd`).
 
 ## Regression test
 
@@ -94,7 +94,7 @@ re-introduced.
 
 ## References
 
-- Commit `2c833e6` — firmware preprocess fix
+- Commit `ff18dcd` — firmware preprocess fix
 - `python/bench/firmware_preprocess_check.py` — regression test
 - `bench/results/firmware_preprocess_check.md` — last passing run
 - `.github/workflows/ci.yml` — CI guard

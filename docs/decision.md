@@ -27,7 +27,7 @@ and the calibration/eval harness. Only unique content is an alternate
 Contains a 160×160 PTQ pipeline with `MobileNetV2_Crop.ipynb` and
 `Quantization.ipynb` notebooks, plus the USB-stream firmware feature
 that was useful enough to cherry-pick into the trunk during the F3
-firmware fix (commit `2c833e6`).
+firmware fix (commit `ff18dcd`).
 
 **Recommendation: ARCHIVE + CHERRY-PICK.** The USB-stream code is
 already merged into the trunk. The notebooks remain on `main` and are
@@ -45,8 +45,8 @@ Has the broadest scope and the most evaluation-ready artefacts:
   `bench/results/tuner_summary.md`
 - Calibration + statistical harness in `python/bench/`
 - F2 fix: held-out validation drawn from train (no test leak), see
-  `python/utils/train_val_split.py` and the `750aa2a` commit
-- F3 firmware fix already landed (`2c833e6`)
+  `python/utils/train_val_split.py` and the `cf02a95` commit
+- F3 firmware fix already landed (`ff18dcd`)
 - Both candidate INT8 TFLite models present:
   - `python/gen/model.tflite` (existing deployed, 662 KB)
   - `python/gen/baseline_model.tflite` (F2-clean retrain, 662 KB)

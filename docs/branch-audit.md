@@ -33,17 +33,17 @@ The recommended consolidation direction is therefore:
 | Branch/ref audited | Human label | Last commit | Commit date | Subject |
 | --- | --- | --- | --- | --- |
 | `origin/main` | Rifki | `b4a11de` | 2026-04-30 13:59:18 +02:00 | `edit preprocess, add camera preview python program` |
-| `origin/jakubs-solution` | Jakub | `2c833e6` | 2026-04-30 15:22:26 +02:00 | `fix(firmware): F3 - use MobileNetV2 [-1,1] preprocessing; add USB stream` |
+| `origin/jakubs-solution` | Jakub | `ff18dcd` | 2026-04-30 15:22:26 +02:00 | `fix(firmware): F3 - use MobileNetV2 [-1,1] preprocessing; add USB stream` |
 | `origin/amineModel` | Amine | `a375d14` | 2026-04-09 13:39:49 +02:00 | `changed the data augmentation` |
 
-Local note: the stale local `main` branch points at `0a2c6cb`, but this audit uses
+Local note: the stale local `main` branch points at `539909b`, but this audit uses
 `origin/main` because the remote branch is the current Rifki branch head.
 
 ## 3. Archive tags
 
 | Tag | Commit | Purpose |
 | --- | --- | --- |
-| `archive/pre-consolidation` | `68ecb41` | Preserves the pre-consolidation Jakub firmware/pipeline state before later Phase 3/4 work. |
+| `archive/pre-consolidation` | `0cb15df` | Preserves the pre-consolidation Jakub firmware/pipeline state before later Phase 3/4 work. |
 | `archive/amineModel` | `a375d14` | Preserves the abandoned Amine branch head. |
 
 Planned Phase 5 tags:
@@ -57,19 +57,19 @@ The required all-branch log command produced the following snapshot.
 
 ```text
 $ git --no-pager log --all --oneline -30
-2c833e6 (HEAD -> jakubs-solution, origin/jakubs-solution) fix(firmware): F3 - use MobileNetV2 [-1,1] preprocessing; add USB stream
-a55638d bench: add calibration evaluation harness
-697cac0 docs: add report skeleton, dataset datasheet, AI-usage statement
-f8394b5 chore: add LICENSE, CITATION.cff, CONTRIBUTING.md
-d6d90a9 bench: add Keras-Tuner trial distillation script
-faf806f (wip/notebook-snapshot) wip: snapshot of dirty notebooks and trained .keras artifacts before consolidation
+ff18dcd (HEAD -> jakubs-solution, origin/jakubs-solution) fix(firmware): F3 - use MobileNetV2 [-1,1] preprocessing; add USB stream
+c3174dd bench: add calibration evaluation harness
+87a3d5d docs: add report skeleton, dataset datasheet, AI-usage statement
+b1a11b4 chore: add LICENSE, CITATION.cff, CONTRIBUTING.md
+d290294 bench: add Keras-Tuner trial distillation script
+d7b9a6a (wip/notebook-snapshot) wip: snapshot of dirty notebooks and trained .keras artifacts before consolidation
 b4a11de (origin/main, origin/HEAD) edit preprocess, add camera preview python program
 ea2f0a6 updated notebook and esp32 program
-68ecb41 (tag: archive/pre-consolidation) Add ESP32-S3 face recognition firmware (TFLite Micro)
-adeee62 Tune hyperparams, fix pipeline compat, update README
-0a2c6cb (main) Add Jupyter notebook, QAT script, improve PTQ calibration
-236d2ca Fix Albumentations 2.0 and MediaPipe 0.10.33 API compatibility
-4a89836 Improve ML pipeline: alpha param, QAT, label smoothing, rejection, tuning
+0cb15df (tag: archive/pre-consolidation) Add ESP32-S3 face recognition firmware (TFLite Micro)
+946f1dd Tune hyperparams, fix pipeline compat, update README
+539909b (main) Add Jupyter notebook, QAT script, improve PTQ calibration
+5f34e02 Fix Albumentations 2.0 and MediaPipe 0.10.33 API compatibility
+f28aab7 Improve ML pipeline: alpha param, QAT, label smoothing, rejection, tuning
 a375d14 (tag: archive/amineModel, origin/amineModel) changed the data augmentation
 ec5df7e push models
 19540c0 Add course project specification
@@ -88,16 +88,16 @@ ec5df7e push models
 
 ```text
 $ git --no-pager log --oneline archive/amineModel..origin/jakubs-solution
-2c833e6 (HEAD -> jakubs-solution, origin/jakubs-solution) fix(firmware): F3 - use MobileNetV2 [-1,1] preprocessing; add USB stream
-a55638d bench: add calibration evaluation harness
-697cac0 docs: add report skeleton, dataset datasheet, AI-usage statement
-f8394b5 chore: add LICENSE, CITATION.cff, CONTRIBUTING.md
-d6d90a9 bench: add Keras-Tuner trial distillation script
-68ecb41 (tag: archive/pre-consolidation) Add ESP32-S3 face recognition firmware (TFLite Micro)
-adeee62 Tune hyperparams, fix pipeline compat, update README
-0a2c6cb (main) Add Jupyter notebook, QAT script, improve PTQ calibration
-236d2ca Fix Albumentations 2.0 and MediaPipe 0.10.33 API compatibility
-4a89836 Improve ML pipeline: alpha param, QAT, label smoothing, rejection, tuning
+ff18dcd (HEAD -> jakubs-solution, origin/jakubs-solution) fix(firmware): F3 - use MobileNetV2 [-1,1] preprocessing; add USB stream
+c3174dd bench: add calibration evaluation harness
+87a3d5d docs: add report skeleton, dataset datasheet, AI-usage statement
+b1a11b4 chore: add LICENSE, CITATION.cff, CONTRIBUTING.md
+d290294 bench: add Keras-Tuner trial distillation script
+0cb15df (tag: archive/pre-consolidation) Add ESP32-S3 face recognition firmware (TFLite Micro)
+946f1dd Tune hyperparams, fix pipeline compat, update README
+539909b (main) Add Jupyter notebook, QAT script, improve PTQ calibration
+5f34e02 Fix Albumentations 2.0 and MediaPipe 0.10.33 API compatibility
+f28aab7 Improve ML pipeline: alpha param, QAT, label smoothing, rejection, tuning
 ec5df7e push models
 ```
 
@@ -165,7 +165,7 @@ Key points:
   `python/MobileNetV2_3ClassKeras_Crop.ipynb`, `python/Quantization.ipynb`, and
   `python/preview_pred.py`.
 - The firmware USB-stream and preprocessing fix are already represented in
-  `origin/jakubs-solution` through commit `2c833e6`, so the remaining `main` material should
+  `origin/jakubs-solution` through commit `ff18dcd`, so the remaining `main` material should
   be merged only if the team wants it as documentation or archived reference.
 
 ### 5.2 Rifki-only assets relative to `jakubs-solution`
