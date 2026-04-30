@@ -224,6 +224,24 @@ def main() -> int:
 
     args.report.write_text("\n".join(lines) + "\n")
     print(f"Wrote report: {args.report}")
+
+    DEFAULT_RESULTS.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        DEFAULT_RESULTS / f"{args.baseline.stem}_originals_test.npz",
+        predictions=pred_b,
+        probs=probs_b,
+        labels=y,
+        capture_ids=capture_ids,
+        model_path=str(args.baseline),
+    )
+    np.savez(
+        DEFAULT_RESULTS / f"{args.challenger.stem}_originals_test.npz",
+        predictions=pred_c,
+        probs=probs_c,
+        labels=y,
+        capture_ids=capture_ids,
+        model_path=str(args.challenger),
+    )
     print(f"  {baseline_name}: {acc_b*100:.2f}% acc, F1={f1_b:.4f}")
     print(f"  {challenger_name}: {acc_c*100:.2f}% acc, F1={f1_c:.4f}")
     print(f"  ΔF1 = {delta_f1:+.4f}, McNemar p = {p_value:.4f}")
