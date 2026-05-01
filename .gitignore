@@ -4,6 +4,13 @@ data/
 # Generated outputs (model files, .npy arrays, C exports)
 python/gen/
 
+# ESP32 / ESP-IDF generated files
+esp32/build/
+esp32/managed_components/
+esp32/sdkconfig
+esp32/sdkconfig.old
+
+
 # Python
 __pycache__/
 *.pyc
