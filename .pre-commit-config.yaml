@@ -1,0 +1,35 @@
+# Pre-commit hooks for the HS-Codesign repo.
+#
+#   pip install pre-commit && pre-commit install
+#
+# CI runs the same `ruff check python` command — see .github/workflows/ci.yml.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=2048']
+        # NOTE: model.tflite (~662 KB) and model.c (~4 MB generated C array)
+        # are committed deliberately. Override per-commit with --no-verify if
+        # you really need to add a fresh model.c. We keep the limit at 2 MB
+        # so it nudges contributors to use git-lfs for anything larger.
+        exclude: '^esp32/main/model\.c$'
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: '^python/.*\.py$'
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+        files: '\.ipynb$'

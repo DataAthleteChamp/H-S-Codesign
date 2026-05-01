@@ -1,0 +1,17 @@
+metric,value
+model_file_bytes,662056
+model_weight_count,430184
+model_int8_weight_count,423107
+model_int32_bias_count,7077
+model_weight_bytes,451415
+model_input_shape,1x96x96x3
+model_input_dtype,int8
+model_input_scale,0.007843137719
+model_input_zero_point,0
+model_output_shape,1x3
+model_output_dtype,int8
+model_output_scale,0.00390625
+model_output_zero_point,-128
+baseline_file_bytes,662056
+baseline_weight_count,430184
+firmware_tensor_arena_size_bytes,1048576

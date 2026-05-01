@@ -1,15 +1,16 @@
-# User images (private, large)
-data/
+# Generated outputs - keep model artifacts, ignore caches and large arrays
+MobileNetV2/python/gen/cache/
+MobileNetV2/python/gen/tuner/
+MobileNetV2/python/gen/__pycache__/
+MobileNetV2/python/gen/*.npy
+MobileNetV2/python/gen/x_*.npy
+MobileNetV2/python/gen/y_*.npy
+MobileNetV2/python/gen/baseline_smoke_*
+MobileNetV2/python/gen/model.c
+MobileNetV2/python/gen/model.keras
 
-# Generated outputs (model files, .npy arrays, C exports)
-python/gen/
-
-# ESP32 / ESP-IDF generated files
-esp32/build/
-esp32/managed_components/
-esp32/sdkconfig
-esp32/sdkconfig.old
-
+# Bench results - keep markdown/csv/json/png reports, ignore large arrays
+MobileNetV2/bench/results/*.npy
 
 # Python
 __pycache__/
@@ -19,9 +20,30 @@ venv/
 .venv/
 env/
 
+# MediaPipe model binary (download via script or from Google)
+MobileNetV2/python/*.tflite
+
 # OS
 .DS_Store
 
 # IDE
 .idea/
 .vscode/
+
+# ESP32 / ESP-IDF generated files
+esp32/build/
+esp32/managed_components/
+esp32/sdkconfig
+esp32/sdkconfig.old
+esp32/dependencies.lock
+ModelExploration/esp32_camera/build/
+ModelExploration/esp32_camera/managed_components/
+ModelExploration/esp32_camera/sdkconfig
+ModelExploration/esp32_camera/sdkconfig.old
+ModelExploration/esp32_camera/dependencies.lock
+ModelExploration/gen/
+ModelExploration/model_summaries/
+ModelExploration/pred_capture/
+ModelExploration/quantized_model/
+ModelExploration/saved_model/
+

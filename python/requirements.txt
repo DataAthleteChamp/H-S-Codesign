@@ -1,7 +1,0 @@
-tensorflow
-keras
-numpy
-scikit-learn
-albumentations
-opencv-python-headless
-mediapipe

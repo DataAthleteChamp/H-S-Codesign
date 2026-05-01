@@ -7,6 +7,7 @@
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 
 #include "camera.h"
@@ -18,40 +19,11 @@ static const char *TAG = "FaceRec";
 static const char *FRAME_PREAMBLE = "\n===FRAME===\n";
 static const char *PREDICTION_PREAMBLE = "\n===PRED===\n";
 static const char *LABELS[] = {"Amine", "Rifki", "Jakub"};
-static constexpr float PREDICTION_THRESHOLD = 0.9f;
 
+// Frame buffer allocated in PSRAM to avoid wasting internal RAM
 static uint8_t *frame_buffer = nullptr;
 static uint8_t *rgb888_buffer = nullptr;
 static bool stream_enabled = false;
-
-static bool ensure_rgb888_buffer()
-{
-    if (rgb888_buffer)
-    {
-        return true;
-    }
-
-    rgb888_buffer = static_cast<uint8_t *>(heap_caps_malloc(FRAME_W * FRAME_H * 3, MALLOC_CAP_SPIRAM));
-    if (!rgb888_buffer)
-    {
-        ESP_LOGE(TAG, "Failed to allocate RGB888 streaming buffer in PSRAM!");
-        return false;
-    }
-    return true;
-}
-
-static int best_prediction_index(const float *prediction)
-{
-    int best_class = 0;
-    for (int i = 1; i < NUM_CLASSES; i++)
-    {
-        if (prediction[i] > prediction[best_class])
-        {
-            best_class = i;
-        }
-    }
-    return best_class;
-}
 
 static void rgb565_frame_to_rgb888(const uint8_t *rgb565_frame, uint8_t *rgb888_frame)
 {
@@ -75,10 +47,6 @@ static void maybe_handle_serial_command()
     const int r = usb_serial_jtag_read_bytes(&c, 1, 0);
     if (r == 1 && c == 'S')
     {
-        if (!stream_enabled && !ensure_rgb888_buffer())
-        {
-            return;
-        }
         stream_enabled = !stream_enabled;
         ESP_LOGI(TAG, "RGB888 frame streaming %s.", stream_enabled ? "enabled" : "disabled");
     }
@@ -135,19 +103,24 @@ void setup()
     }
     ESP_ERROR_CHECK(err);
 
-    frame_buffer = static_cast<uint8_t *>(heap_caps_malloc(FRAME_W * FRAME_H * FRAME_C, MALLOC_CAP_SPIRAM));
-    if (!frame_buffer)
+    // Allocate frame buffer in PSRAM
+    frame_buffer = (uint8_t *)heap_caps_malloc(FRAME_W * FRAME_H * FRAME_C, MALLOC_CAP_SPIRAM);
+    rgb888_buffer = (uint8_t *)heap_caps_malloc(FRAME_W * FRAME_H * 3, MALLOC_CAP_SPIRAM);
+    if (!frame_buffer || !rgb888_buffer)
     {
-        ESP_LOGE(TAG, "Failed to allocate frame buffer in PSRAM!");
+        ESP_LOGE(TAG, "Failed to allocate frame buffers in PSRAM!");
         abort();
     }
 
+    // Initialize camera
+    ESP_LOGI(TAG, "Initializing camera...");
     if (!camera_init())
     {
         ESP_LOGE(TAG, "Camera init failed!");
         abort();
     }
 
+    // Initialize TFLite Micro inference
     ESP_LOGI(TAG, "Initializing inference engine...");
     if (!inference_init())
     {
@@ -169,26 +142,43 @@ void loop()
 {
     maybe_handle_serial_command();
 
+    // Capture frame
+    const int64_t t_capture_start = esp_timer_get_time();
     if (!camera_capture_frame(frame_buffer))
     {
         ESP_LOGW(TAG, "Frame capture failed, retrying...");
         vTaskDelay(pdMS_TO_TICKS(100));
         return;
     }
+    const int64_t t_capture_end = esp_timer_get_time();
 
+    // Preprocess: 320x240 RGB565 -> model-size INT8 RGB888
     inference_preprocess(frame_buffer);
+    const int64_t t_preprocess_end = esp_timer_get_time();
 
+    // Run inference
     float prediction[NUM_CLASSES];
     if (!inference_predict(prediction))
     {
         ESP_LOGE(TAG, "Inference failed!");
         return;
     }
+    const int64_t t_inference_end = esp_timer_get_time();
 
-    const int best_class = best_prediction_index(prediction);
-    const float best_conf = prediction[best_class];
+    // Find argmax and check confidence
+    int best_class = 0;
+    float best_conf = prediction[0];
+    for (int i = 1; i < NUM_CLASSES; i++)
+    {
+        if (prediction[i] > best_conf)
+        {
+            best_conf = prediction[i];
+            best_class = i;
+        }
+    }
 
-    if (best_conf >= PREDICTION_THRESHOLD)
+    // Apply rejection threshold
+    if (best_conf >= 0.9f)
     {
         ESP_LOGI(TAG, ">>> %s (%.1f%%)", LABELS[best_class], best_conf * 100.0f);
     }
@@ -197,8 +187,18 @@ void loop()
         ESP_LOGI(TAG, ">>> Unknown (best: %s %.1f%%)", LABELS[best_class], best_conf * 100.0f);
     }
 
+    // Print all class probabilities
     ESP_LOGI(TAG, "    Amine=%.2f  Rifki=%.2f  Jakub=%.2f",
              prediction[0], prediction[1], prediction[2]);
+
+    // Per-stage and end-to-end latency, machine-parseable for the
+    // python/tools/serial_latency_logger.py replay/serial pipeline.
+    const float capture_ms = (t_capture_end - t_capture_start) / 1000.0f;
+    const float preprocess_ms = (t_preprocess_end - t_capture_end) / 1000.0f;
+    const float inference_ms = (t_inference_end - t_preprocess_end) / 1000.0f;
+    const float latency_ms = (t_inference_end - t_capture_start) / 1000.0f;
+    ESP_LOGI(TAG, "latency_ms=%.2f capture_ms=%.2f preprocess_ms=%.2f inference_ms=%.2f",
+             latency_ms, capture_ms, preprocess_ms, inference_ms);
 
     maybe_stream_rgb888_frame(prediction, best_class, best_conf);
 
