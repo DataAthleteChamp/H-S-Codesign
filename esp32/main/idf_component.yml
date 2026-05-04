@@ -2,5 +2,6 @@
 dependencies:
   espressif/esp-tflite-micro: "*"
   espressif/esp32-camera: "*"
+  espressif/human_face_detect: "^0.3.0"
   idf:
     version: ">=4.1.0"

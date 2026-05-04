@@ -1,16 +1,32 @@
 # Generated outputs - keep model artifacts, ignore caches and large arrays
-MobileNetV2/python/gen/cache/
-MobileNetV2/python/gen/tuner/
-MobileNetV2/python/gen/__pycache__/
-MobileNetV2/python/gen/*.npy
-MobileNetV2/python/gen/x_*.npy
-MobileNetV2/python/gen/y_*.npy
-MobileNetV2/python/gen/baseline_smoke_*
-MobileNetV2/python/gen/model.c
-MobileNetV2/python/gen/model.keras
+ModelExploration/MobileNetV2/python/gen/cache/
+ModelExploration/MobileNetV2/python/gen/tuner/
+ModelExploration/MobileNetV2/python/gen/__pycache__/
+ModelExploration/MobileNetV2/python/gen/*.npy
+ModelExploration/MobileNetV2/python/gen/x_*.npy
+ModelExploration/MobileNetV2/python/gen/y_*.npy
+ModelExploration/MobileNetV2/python/gen/baseline_smoke_*
+ModelExploration/MobileNetV2/python/gen/model.c
+ModelExploration/MobileNetV2/python/gen/model.keras
+ModelExploration/esp32_custom_cnn
+ModelExploration/esp32_minixception
+ModelExploration/esp32_minixception96
+ModelExploration/esp32_mnv2
+ModelExploration/esp32_mnv3
+ModelExploration/facecropped_pred
+ModelExploration/FaceCropDataset.ipynb
+ModelExploration/ModelPerformanceComparison.ipynb
+ModelExploration/labeled_pred_frames
+
+
+data_face_crop_balanced
+data
+data_face_crop
+data_face_crop_review
 
 # Bench results - keep markdown/csv/json/png reports, ignore large arrays
-MobileNetV2/bench/results/*.npy
+ModelExploration/MobileNetV2/bench/results/*.npy
+ModelExploration/data/
 
 # Python
 __pycache__/
@@ -21,7 +37,7 @@ venv/
 env/
 
 # MediaPipe model binary (download via script or from Google)
-MobileNetV2/python/*.tflite
+ModelExploration/MobileNetV2/python/*.tflite
 
 # OS
 .DS_Store

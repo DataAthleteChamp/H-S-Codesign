@@ -10,7 +10,7 @@ import serial
 
 
 DEFAULT_PORT = "COM7"
-DEFAULT_OUTPUT_PATH = "pred_capture"
+DEFAULT_OUTPUT_PATH = "labeled_pred_frames"
 DEFAULT_SAVE_INTERVAL_SECONDS = 2.0
 BAUD_RATE = 921600
 SERIAL_TIMEOUT = 10.0
@@ -39,7 +39,7 @@ def preview_stream(port: str, output_path: str, save_interval_seconds: float):
     font = pygame.font.Font(None, 24)
 
     print("connected.")
-    print("Press SPACE to save current frame.")
+    print("Press SPACE to save current annotated frame.")
     print(f"Saving one frame and prediction every {save_interval_seconds:g} seconds.")
     print("Press 'r' to toggle timed recording.")
     print("Press 's' to toggle streaming, 'q' or ESC to quit.")
@@ -65,7 +65,7 @@ def preview_stream(port: str, output_path: str, save_interval_seconds: float):
                         recording = not recording
                         print(f"Recording {'enabled' if recording else 'disabled'}.")
                     elif event.key == pygame.K_SPACE and last_surface is not None:
-                        save_frame(output_path, last_surface, last_prediction)
+                        save_frame(output_path, last_surface, last_prediction, font)
 
             result = capture_frame(serial_port)
             if result is None:
@@ -81,12 +81,11 @@ def preview_stream(port: str, output_path: str, save_interval_seconds: float):
             last_prediction = prediction
             now = time.monotonic()
             if recording and now - last_save_time >= save_interval_seconds:
-                save_frame(output_path, last_surface, last_prediction)
+                save_frame(output_path, last_surface, last_prediction, font)
                 last_save_time = now
 
             screen.blit(surface, (0, 0))
-            if prediction is not None:
-                draw_prediction_overlay(screen, font, prediction)
+            draw_prediction_overlay(screen, font, prediction)
             pygame.display.flip()
             time.sleep(0.001)
     finally:
@@ -122,7 +121,7 @@ def parse_prediction(chunk: bytes) -> dict[str, object] | None:
 
     line = chunk[start:end].decode("utf-8", errors="replace").strip()
     fields = line.split(",")
-    if len(fields) != 6:
+    if len(fields) != 16:
         return None
 
     try:
@@ -132,24 +131,39 @@ def parse_prediction(chunk: bytes) -> dict[str, object] | None:
             "index": int(fields[1]),
             "confidence": float(fields[2]),
             "scores": scores,
+            "detection_state": fields[6],
+            "detector_score": float(fields[7]),
+            "bbox": tuple(int(value) for value in fields[8:12]),
+            "crop": tuple(int(value) for value in fields[12:16]),
         }
     except ValueError:
         return None
 
 
-def draw_prediction_overlay(screen: pygame.Surface, font: pygame.font.Font, prediction: dict[str, object]):
-    confidence = float(prediction["confidence"])
+def prediction_overlay_lines(prediction: dict[str, object] | None) -> tuple[list[str], str, int, float]:
+    if prediction is None:
+        return ["Prediction: NO_DATA"], "", -1, 0.0
+
     scores = [float(score) for score in prediction["scores"]]
-    best_index = max(range(len(scores)), key=scores.__getitem__)
-    best_label = CLASS_NAMES[best_index]
-    best_score = scores[best_index]
-    result_label = best_label if best_score >= PREDICTION_THRESHOLD else "Unknown"
+    detection_state = str(prediction.get("detection_state", "NONE"))
 
-    lines = [
-        f"Best: {best_label} ({best_score * 100:.1f}%)",
-        f"Prediction: {result_label}",
-    ]
+    if detection_state == "FACE" and scores:
+        best_index = max(range(len(scores)), key=scores.__getitem__)
+        best_label = CLASS_NAMES[best_index]
+        best_score = scores[best_index]
+        result_label = best_label if best_score >= PREDICTION_THRESHOLD else "Unknown"
+        lines = [
+            f"Prediction: {result_label}",
+            f"Best: {best_label} ({best_score * 100:.1f}%)",
+            "  ".join(f"{name}: {score * 100:.1f}%" for name, score in zip(CLASS_NAMES, scores)),
+        ]
+        return lines, result_label, best_index, best_score
 
+    return ["Prediction: NO_FACE", "Best: none"], "NO_FACE", -1, 0.0
+
+
+def draw_prediction_overlay(screen: pygame.Surface, font: pygame.font.Font, prediction: dict[str, object] | None):
+    lines, _, _, _ = prediction_overlay_lines(prediction)
     padding = 8
     rendered = [font.render(line, True, (255, 255, 255)) for line in lines]
     width = max(surface.get_width() for surface in rendered) + padding * 2
@@ -166,29 +180,89 @@ def draw_prediction_overlay(screen: pygame.Surface, font: pygame.font.Font, pred
     screen.blit(overlay, (8, 8))
 
 
-def save_frame(output_path: str, surface: pygame.Surface, prediction: dict[str, object] | None):
+def save_frame(
+    output_path: str,
+    surface: pygame.Surface,
+    prediction: dict[str, object] | None,
+    font: pygame.font.Font,
+):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     image_filename = f"frame_{timestamp}.png"
     image_path = os.path.join(output_path, image_filename)
-    pygame.image.save(surface, image_path)
+    annotated_surface = surface.copy()
+    draw_prediction_overlay(annotated_surface, font, prediction)
+    pygame.image.save(annotated_surface, image_path)
 
     label = ""
     index = ""
     confidence = ""
     scores = ["", "", ""]
+    best_label = ""
+    best_index = ""
+    best_confidence = ""
+    detection_state = ""
+    detector_score = ""
+    bbox = ["", "", "", ""]
+    crop = ["", "", "", ""]
     if prediction is not None:
+        _, best_label_value, best_index_value, best_score = prediction_overlay_lines(prediction)
         label = str(prediction["label"])
         index = str(prediction["index"])
         confidence = f"{float(prediction['confidence']):.6f}"
         scores = [f"{score:.6f}" for score in prediction["scores"]]
+        best_label = best_label_value
+        best_index = str(best_index_value)
+        best_confidence = f"{best_score:.6f}"
+        detection_state = str(prediction.get("detection_state", ""))
+        detector_score = f"{float(prediction.get('detector_score', 0.0)):.6f}"
+        bbox = [str(v) for v in prediction.get("bbox", ("", "", "", ""))]
+        crop = [str(v) for v in prediction.get("crop", ("", "", "", ""))]
 
     csv_path = os.path.join(output_path, "frames.csv")
     write_header = not os.path.exists(csv_path)
     with open(csv_path, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if write_header:
-            writer.writerow(["timestamp", "filename", "label", "index", "confidence", *CLASS_NAMES])
-        writer.writerow([timestamp, image_filename, label, index, confidence, *scores])
+            writer.writerow(
+                [
+                    "timestamp",
+                    "filename",
+                    "label",
+                    "index",
+                    "confidence",
+                    "best_label",
+                    "best_index",
+                    "best_confidence",
+                    *CLASS_NAMES,
+                    "detection_state",
+                    "detector_score",
+                    "bbox_x1",
+                    "bbox_y1",
+                    "bbox_x2",
+                    "bbox_y2",
+                    "crop_x",
+                    "crop_y",
+                    "crop_w",
+                    "crop_h",
+                ]
+            )
+        writer.writerow(
+            [
+                timestamp,
+                image_filename,
+                label,
+                index,
+                confidence,
+                best_label,
+                best_index,
+                best_confidence,
+                *scores,
+                detection_state,
+                detector_score,
+                *bbox,
+                *crop,
+            ]
+        )
 
     print(f"Saved {image_path}")
 
