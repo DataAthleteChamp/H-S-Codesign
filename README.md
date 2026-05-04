@@ -6,13 +6,12 @@ This repository contains a small hardware/software codesign project for running 
 
 ## Repository Layout
 
-- `MobileNetV2/` - main model pipeline, including Python training scripts, benchmarking tools, generated model files, and report notes.
 - `esp32/` - ESP-IDF firmware for camera capture, preprocessing, and on-device inference.
 - `ModelExploration/` - earlier model experiments and prototype firmware.
 
 ## Main Workflow
 
-1. Train and compare candidate models in `MobileNetV2/python/`.
+1. Train and compare candidate models in `ModelExploration`.
 2. Export the selected model as `.tflite`, `.c`, and `.h` files.
 3. Build and flash the ESP32-S3 firmware in `esp32/`.
 4. Test real-time camera predictions on the device.
