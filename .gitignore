@@ -63,3 +63,8 @@ ModelExploration/pred_capture/
 ModelExploration/quantized_model/
 ModelExploration/saved_model/
 
+# Stale pre-restructure scratch dirs (canonical sources are under
+# ModelExploration/MobileNetV2/). Kept ignored so they don't show up in
+# `git status` if anyone re-imports the project at the old paths.
+/python/
+/bench/
