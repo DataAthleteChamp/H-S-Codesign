@@ -3,6 +3,14 @@ Stage 2: Preprocessing
 
 Loads all images from data/, detects and crops faces using MediaPipe,
 resizes to 96x96, normalizes to [-1,1], and saves as NumPy arrays.
+
+Test-split policy: augmented variants are skipped when loading the test
+split. Augmentation must apply to train only — see the F1 finding in
+docs/decision.md and the references in
+docs/report/methods_test_hygiene.md (Goodfellow §5.3/§7.4; Kapoor &
+Narayanan 2023, arXiv:2207.07048; Sculley et al. NeurIPS 2015). The
+filter is defence-in-depth: even if augmented files reappear under
+data/<person>/test/, they will not enter ``x_test.npy``.
 """
 
 import os
@@ -11,6 +19,8 @@ import numpy as np
 import mediapipe as mp
 from mediapipe.tasks.python import vision
 from mediapipe.tasks.python.core.base_options import BaseOptions
+
+from utils.train_val_split import AUG_SUFFIXES
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
 GEN_DIR = os.path.join(os.path.dirname(__file__), 'gen')
@@ -22,6 +32,12 @@ IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.bmp'}
 # Label mapping (alphabetical order for reproducibility)
 LABELS = {'Amine': 0, 'Rifki': 1, 'Jakub': 2}
 NUM_CLASSES = len(LABELS)
+
+
+def _is_augmented_filename(filename: str) -> bool:
+    """Return True if the filename's stem ends with a known augmentation suffix."""
+    stem = os.path.splitext(filename)[0].lower()
+    return any(stem.endswith(suffix) for suffix in AUG_SUFFIXES)
 
 
 def detect_and_crop_face(img_rgb: np.ndarray, detector: vision.FaceDetector) -> np.ndarray:
@@ -75,6 +91,11 @@ def load_and_preprocess_split(person_dir: str, split: str,
         if ext not in IMAGE_EXTENSIONS:
             continue
 
+        # Test-split hygiene (F1 fix): never load augmented variants into
+        # the test arrays. See module docstring.
+        if split == 'test' and _is_augmented_filename(filename):
+            continue
+
         img_path = os.path.join(split_dir, filename)
         img_bgr = cv2.imread(img_path)
         if img_bgr is None:
@@ -124,6 +145,9 @@ def preprocess_all(data_dir: str = DATA_DIR, gen_dir: str = GEN_DIR):
         person_dir = os.path.join(data_dir, person)
         if not os.path.isdir(person_dir):
             continue
+        # Skip quarantine and other meta folders (e.g. ``_quarantine``).
+        if person.startswith('_'):
+            continue
 
         # Process train split
         imgs, lbls = load_and_preprocess_split(person_dir, 'train', detector)
@@ -156,10 +180,22 @@ def preprocess_all(data_dir: str = DATA_DIR, gen_dir: str = GEN_DIR):
     print(f'Saved: x_test  {x_test.shape}, y_test  {y_test.shape}')
 
     # Print class distribution
+    test_counts: list[int] = []
     for name, idx in LABELS.items():
         n_train = np.sum(y_train == idx)
         n_test = np.sum(y_test == idx)
+        test_counts.append(int(n_test))
         print(f'  {name} (label {idx}): {n_train} train, {n_test} test')
+
+    # Hygiene assertion (F1 fix): after the augmentation-skip filter the
+    # test set must hold only original captures, balanced per class.
+    if test_counts and len(set(test_counts)) != 1:
+        raise RuntimeError(
+            'preprocess.py: test-split per-class counts are not balanced: '
+            f'{dict(zip(LABELS.keys(), test_counts, strict=True))}. '
+            'Either originals are missing or augmented files leaked in. '
+            'Run `python tools/clean_test_augmentations.py --quarantine`.'
+        )
 
 
 if __name__ == '__main__':

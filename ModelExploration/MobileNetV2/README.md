@@ -34,8 +34,13 @@ ESP-IDF), and a written design-space / verification report (`docs/report/`).
 
 > **What "honest" means:** we re-evaluate on the 60 *original* captures only
 > (the test split was previously contaminated with augmented variants of
-> those same captures — finding F1). Both candidate models, the McNemar
-> head-to-head, and the bootstrap CIs are computed at the capture level.
+> those same captures — finding F1; the on-disk pollution has since been
+> removed and audited via
+> [`bench/results/test_pollution_inventory.md`](bench/results/test_pollution_inventory.md)
+> and [`data/_quarantine/test_augmented/manifest.json`](../../data/_quarantine/test_augmented/manifest.json),
+> see [`docs/report/methods_test_hygiene.md`](docs/report/methods_test_hygiene.md)).
+> Both candidate models, the McNemar head-to-head, and the bootstrap CIs
+> are computed at the capture level.
 
 ## Repository layout
 

@@ -12,8 +12,10 @@ footprint bench-firmware-check` regenerates every source artefact.
 |---|---:|---|---|
 | accuracy on n=60 originals | 98.33 % (59/60) | Wilson [91.14 %, 99.71 %] | `bench/results/stats_summary.md` |
 | macro-F1 on n=60 originals | 0.9833 | cluster bootstrap [0.9433, 1.0000] | `bench/results/stats_summary.md` |
-| accuracy on n=780 augmented | 97.69 % | – | `bench/results/calibration_report.md` |
+| accuracy on n=780 augmented (biased panel) | 97.69 % | – | `bench/results/calibration_report.md`, regenerable from `python/bench/build_full_aug_test.py` |
 | Δacc (augmented − originals) | −0.64 pp | – | `bench/results/calibration_report.md` |
+
+The augmented panel is informational only: its 780 rows are the same 60 captures plus the 720 historical augmented variants now stored under `data/_quarantine/test_augmented/` (SHA-256 manifest). The number is reproducible from clean disk state — see § Reproduction.
 
 ## 2 · Per-class F1 (originals-only, honest)
 
@@ -131,8 +133,10 @@ Source: `bench/results/firmware_preprocess_check.md`.
 ## 12 · Reproduction one-liner
 
 ```bash
-make originals && make eval && make compare && make stats && \
+make originals && make full-aug && make eval && make compare && make stats && \
 make figures && make footprint && make bench-firmware-check
 ```
+
+The `full-aug` target runs `python/bench/build_full_aug_test.py`, which reads the 60 originals from `data/<class>/test/` and the 720 quarantined augmented variants from `data/_quarantine/test_augmented/<class>/`, then writes `bench/results/jakubs_qat_full_aug_test.npz`. This makes the augmentation-robustness panel reproducible from clean disk state without ever putting augmented variants back under `data/<class>/test/`.
 
 Each target writes its source-of-truth file inside `bench/results/`; this cheat-sheet links to those files rather than restating numbers, so re-running the pipeline keeps everything in sync.

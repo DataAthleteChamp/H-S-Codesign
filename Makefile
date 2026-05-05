@@ -60,6 +60,19 @@ originals: venv ## (Re)build the cleaned originals-only test arrays in bench/res
 	$(VENV_PY) python/bench/build_originals_test.py \
 		--data-dir data --out-dir bench/results
 
+.PHONY: full-aug
+full-aug: venv ## (Re)build the n=780 augmentation-robustness npz from quarantined files
+	$(VENV_PY) python/bench/build_full_aug_test.py \
+		--data-dir data \
+		--quarantine-dir data/_quarantine/test_augmented \
+		--face-model python/blaze_face_short_range.tflite \
+		--model python/gen/model.tflite \
+		--out bench/results/jakubs_qat_full_aug_test.npz
+
+.PHONY: clean-test-aug
+clean-test-aug: venv ## Move augmented variants out of data/<person>/test/ to data/_quarantine/ (idempotent)
+	$(VENV_PY) python/tools/clean_test_augmentations.py --data-dir data --quarantine
+
 .PHONY: eval
 eval: venv ## Evaluate INT8 TFLite on the originals-only test set (n=60)
 	$(VENV_PY) python/bench/eval_branches.py \

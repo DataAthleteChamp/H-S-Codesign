@@ -68,3 +68,8 @@ ModelExploration/saved_model/
 # `git status` if anyone re-imports the project at the old paths.
 /python/
 /bench/
+
+# Local Overleaf export bundle — regenerate with the recipe in
+# overleaf-export/README.md (canonical sources live under
+# ModelExploration/MobileNetV2/docs/report and bench/results).
+/overleaf-export/

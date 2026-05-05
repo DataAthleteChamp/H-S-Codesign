@@ -47,6 +47,7 @@ def _save(fig: plt.Figure, name: str) -> None:
 
 def fig_dataspace() -> None:
     data_dir = ROOT / "data"
+    quar_dir = data_dir / "_quarantine" / "test_augmented"
     if not data_dir.exists():
         print("  skipping dataspace: data/ not present locally")
         return
@@ -64,8 +65,17 @@ def fig_dataspace() -> None:
             list((data_dir / cls / "test").glob("*.png"))
         originals = [f for f in test_files
                      if not any(f.stem.lower().endswith(s) for s in aug_suffixes)]
+        # After the F1 cleanup, augmented test variants live under
+        # data/_quarantine/test_augmented/<cls>/ (see methods_test_hygiene.md).
+        # Count them here so the "test (with augs)" bar still reflects the
+        # logical pre-cleanup test population, not just what's on disk under
+        # data/<cls>/test/.
+        quar_cls = quar_dir / cls
+        quar_files = []
+        if quar_cls.is_dir():
+            quar_files = list(quar_cls.glob("*.jpg")) + list(quar_cls.glob("*.png"))
         train_total.append(len(train_files))
-        test_total.append(len(test_files))
+        test_total.append(len(test_files) + len(quar_files))
         test_originals.append(len(originals))
 
     x = np.arange(len(LABELS))

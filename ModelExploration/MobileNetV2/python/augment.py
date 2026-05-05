@@ -4,14 +4,25 @@ Stage 1: Data Augmentation
 Walks data/ directory, finds person folders, and applies 12 augmentations
 (8 single + 4 combined) per image in TRAIN split only.
 Idempotent — skips existing files.
+
+Policy: augmentation is applied to the TRAIN split only. Augmented variants
+must never be persisted under data/<person>/test/ — see
+docs/decision.md (finding F1) and the references in
+docs/report/methods_test_hygiene.md (Goodfellow §5.3/§7.4; Kapoor &
+Narayanan 2023, arXiv:2207.07048; Sculley et al. NeurIPS 2015). To
+restore a polluted test split, run
+``python tools/clean_test_augmentations.py --quarantine``.
 """
 
 import os
+import sys
 from typing import Tuple
 import cv2
 import albumentations as A
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+
+TRAIN_ONLY = True  # See module docstring; do not flip without team review.
 
 # Define augmentations with their suffixes
 AUGMENTATIONS = {
@@ -127,6 +138,44 @@ def augment_folder(folder_path: str) -> Tuple[int, int]:
     return num_originals, num_created
 
 
+def _assert_test_split_clean(data_dir: str) -> None:
+    """Raise if any data/<person>/test/ file matches an augmentation suffix.
+
+    Defence-in-depth so a future edit cannot silently re-pollute the test
+    split. Reuses ALL_AUGMENTATIONS as the single source of truth for what
+    counts as an augmented filename.
+    """
+    suffixes = tuple(ALL_AUGMENTATIONS.keys())
+    polluted: list[str] = []
+    if not os.path.isdir(data_dir):
+        return
+    for person in sorted(os.listdir(data_dir)):
+        if person.startswith('_'):
+            continue
+        test_dir = os.path.join(data_dir, person, 'test')
+        if not os.path.isdir(test_dir):
+            continue
+        for filename in os.listdir(test_dir):
+            ext = os.path.splitext(filename)[1].lower()
+            if ext not in IMAGE_EXTENSIONS:
+                continue
+            stem = os.path.splitext(filename)[0].lower()
+            if any(stem.endswith(suffix) for suffix in suffixes):
+                polluted.append(os.path.join(test_dir, filename))
+    if polluted:
+        msg = (
+            f'augment.py: found {len(polluted)} augmented file(s) under '
+            f'data/<person>/test/, which violates the train-only policy '
+            f'(see module docstring). Run '
+            f'`python tools/clean_test_augmentations.py --quarantine` '
+            f'to restore the test split.'
+        )
+        print(msg, file=sys.stderr)
+        for path in polluted[:5]:
+            print(f'  {path}', file=sys.stderr)
+        raise SystemExit(2)
+
+
 def main():
     data_dir = os.path.abspath(DATA_DIR)
     if not os.path.isdir(data_dir):
@@ -146,6 +195,9 @@ def main():
         person_dir = os.path.join(data_dir, person)
         if not os.path.isdir(person_dir):
             continue
+        if person.startswith('_'):
+            # Skip quarantine and other meta folders.
+            continue
 
         # Only augment training data.
         # Test data must remain unaugmented for fair evaluation.
@@ -163,6 +215,11 @@ def main():
     print()
     print(f'Summary: {total_originals} originals, {total_created} new augmented images created')
     print(f'Each original has {len(ALL_AUGMENTATIONS)} augmented variants')
+
+    # Defensive post-run guard: refuse to leave augmented files in the
+    # test split. Failing here is the project's chosen recovery mechanism
+    # (see module docstring + docs/decision.md F1 finding).
+    _assert_test_split_clean(data_dir)
 
 
 if __name__ == '__main__':

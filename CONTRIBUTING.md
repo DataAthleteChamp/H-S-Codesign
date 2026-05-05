@@ -38,3 +38,20 @@ Use benchmark outputs under `bench/results/` for report figures and tables. Hard
 ## Course context
 
 This repository is an academic project for DTU 02214 — Hardware/Software Codesign, Spring 2026. Contributions outside the course team are not expected before the May 7, 2026 submission deadline; after submission, the project may be opened for community improvements.
+
+## Data hygiene
+
+Augmentation is applied to the `train` split only. Augmented variants
+must never be persisted under `data/<person>/test/`. This is enforced
+in code: `ModelExploration/MobileNetV2/python/augment.py` raises a
+`SystemExit(2)` after each run if any file under `data/<person>/test/`
+matches an augmentation suffix, and
+`ModelExploration/MobileNetV2/python/preprocess.py` skips augmentation
+suffixes when loading the test split and asserts balanced per-class
+counts. To restore a polluted test split, run
+`python tools/clean_test_augmentations.py --quarantine` from the
+`ModelExploration/MobileNetV2/python/` directory; it moves matched
+files into `data/_quarantine/test_augmented/<person>/` with a
+SHA-256 manifest. See
+[`ModelExploration/MobileNetV2/docs/report/methods_test_hygiene.md`](ModelExploration/MobileNetV2/docs/report/methods_test_hygiene.md)
+for the methodological rationale and references.

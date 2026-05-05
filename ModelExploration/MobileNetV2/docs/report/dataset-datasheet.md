@@ -12,16 +12,16 @@ TODO(team): add the exact capture dates, devices, and consent/ethics notes used 
 
 Classes are `Amine`, `Rifki`, and `Jakub`. Images are stored locally under `data/<class>/train/` and `data/<class>/test/`; the `data/` directory is not tracked in git because it contains personal photos.
 
-Verified file counts on disk:
+Verified file counts on disk (post-cleanup, see § 4 / finding F1):
 
-| Class | Original train captures | Train images on disk | Original test captures | Test images on disk |
-| --- | ---: | ---: | ---: | ---: |
-| Amine | 80 | 1040 | 20 | 260 |
-| Rifki | 80 | 1040 | 20 | 260 |
-| Jakub | 80 | 1040 | 20 | 260 |
-| **Total** | **240** | **3120** | **60** | **780** |
+| Class | Original train captures | Train images on disk | Original test captures | Test images on disk | Quarantined augmented test variants |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Amine | 80 | 1040 | 20 | 20 | 240 |
+| Rifki | 80 | 1040 | 20 | 20 | 240 |
+| Jakub | 80 | 1040 | 20 | 20 | 240 |
+| **Total** | **240** | **3120** | **60** | **60** | **720** |
 
-The training split contains 80 original captures per class. Each original has 12 derived augmentations plus the original image itself, giving `80 × 13 = 1040` train files per class. The test split currently also contains augmented variants (`20 × 13 = 260` files per class), but these are correlated with the original captures and must not be treated as independent test samples. The effective independent test size is therefore 60 original captures: 20 per class.
+The training split contains 80 original captures per class. Each original has 12 derived augmentations plus the original image itself, giving `80 × 13 = 1040` train files per class. The test split holds **only the 60 original captures** (20 per class). The 720 historical augmented variants (`20 × 12 = 240` per class) were removed from `data/<class>/test/` and quarantined under `data/_quarantine/test_augmented/<class>/` with a SHA-256 manifest (`data/_quarantine/test_augmented/manifest.json`); these are retained for the augmentation-robustness diagnostic only and are never loaded by the headline evaluation.
 
 TODO(team): confirm whether any additional non-team or rejection-class images were collected outside this three-class folder layout.
 
@@ -35,7 +35,7 @@ TODO(team): describe the exact devices, capture locations, consent process, and 
 
 Labels are derived from the folder names (`Amine`, `Rifki`, `Jakub`). The preprocessing pipeline detects faces with MediaPipe BlazeFace, crops the face with approximately 15% padding, resizes to the model input size, and normalizes pixels for the MobileNetV2 pipeline.
 
-Augmentations should be applied train-only in the corrected evaluation pipeline. The current on-disk dataset includes augmentations in both `train/` and `test/`; this was identified as a found-and-fixed methodology issue because augmented test files inflate the apparent sample size.
+Augmentations are applied train-only. The historical augmented variants of the test split (`20 × 12 = 240` per class, 720 total) were removed from `data/<class>/test/` and quarantined under `data/_quarantine/test_augmented/` with a SHA-256 manifest; the cleanup procedure and code-level guards (in `python/augment.py` and `python/preprocess.py`) are described in `docs/report/methods_test_hygiene.md`. The quarantined files are still on disk and are read back by `python/bench/build_full_aug_test.py` to regenerate the n=780 augmentation-robustness diagnostic, but they never re-enter the headline test arrays.
 
 TODO(team): record the final image size(s) used for the submitted model and whether any images failed face detection.
 

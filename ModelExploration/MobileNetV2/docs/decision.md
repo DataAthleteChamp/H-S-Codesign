@@ -160,3 +160,24 @@ Do not let the AI fill it in.
 - `bench/results/tuner_summary.md` — Phase 4 distillation of 30 tuner trials
 - `bench/results/baseline_retrain_report.md` — F2-clean retrain run notes
 - `bench/results/firmware_preprocess_check.md` — F3 regression test
+
+## Addendum — F1 on-disk cleanup
+
+The historical contamination of `data/<person>/test/` with 720
+augmented variants (240 per class) has been remediated post-hoc. The
+headline numbers above are unchanged because the bench harness was
+already filtering by suffix; the cleanup is a methodological hygiene
+fix that prevents recurrence.
+
+- `bench/results/test_pollution_inventory.md` — pre-cleanup audit with
+  SHA-256 of every removed file (720 entries).
+- `data/_quarantine/test_augmented/manifest.json` — quarantine manifest
+  recording what was moved and where (720 entries).
+- `bench/results/postclean_metrics.md` — post-cleanup re-evaluation
+  table showing identical metrics; reproduces the table in §4 above.
+- `docs/report/methods_test_hygiene.md` — short methods note for the
+  report with the academic references.
+- `python/tools/clean_test_augmentations.py` — the cleanup tool.
+- `python/augment.py` and `python/preprocess.py` carry defensive guards
+  so a future re-run cannot silently re-pollute the test split.
+
