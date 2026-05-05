@@ -1,8 +1,9 @@
 """
 Stage 1: Data Augmentation
 
-Walks data/ directory, finds person folders with train/test splits,
-and applies 12 augmentations (8 single + 4 combined) per image. Idempotent — skips existing files.
+Walks data/ directory, finds person folders, and applies 12 augmentations
+(8 single + 4 combined) per image in TRAIN split only.
+Idempotent — skips existing files.
 """
 
 import os
@@ -146,7 +147,9 @@ def main():
         if not os.path.isdir(person_dir):
             continue
 
-        for split in ['train', 'test']:
+        # Only augment training data.
+        # Test data must remain unaugmented for fair evaluation.
+        for split in ['train']:
             split_dir = os.path.join(person_dir, split)
             if not os.path.isdir(split_dir):
                 continue
