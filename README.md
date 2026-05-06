@@ -7,7 +7,8 @@ This repository contains a small hardware/software codesign project for running 
 ## Repository Layout
 
 - `esp32/` - ESP-IDF firmware for camera capture, preprocessing, and on-device inference.
-- `ModelExploration/` - earlier model experiments and prototype firmware.
+- `ModelExploration/` - model experiments and prototype firmware.
+- `Preview.py` - Python program to test and capture image.
 
 ## Main Workflow
 
@@ -21,8 +22,21 @@ This repository contains a small hardware/software codesign project for running 
 From an ESP-IDF shell:
 
 ```powershell
-cd Project\H-S-Codesign\esp32
+cd esp32
 idf.py set-target esp32s3
 idf.py build
 idf.py -p <PORT> flash
 ```
+
+## Run and Test
+
+From an ESP-IDF shell:
+
+```powershell
+cd esp32
+idf.py -p <PORT> flash
+cd ..
+python Preview.py --port <PORT>
+```
+
+The test image will be automatically saved into a folder.
