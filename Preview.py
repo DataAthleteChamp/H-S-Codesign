@@ -20,10 +20,14 @@ FRAME_PREAMBLE = b"===FRAME===\n"
 PREDICTION_PREAMBLE = b"===PRED===\n"
 FRAME_SIZE = WIDTH * HEIGHT * 3
 CLASS_NAMES = ("Amine", "Rifki", "Jakub")
-PREDICTION_THRESHOLD = 0.85
+# Calibrated rejection threshold from python/bench/run_stats.py
+# (also see README.md and bench/results/stats_summary.md). 0.77 gives
+# 100% accepted accuracy with 96.7% accept rate on the n=60 originals
+# test set; previous default of 0.85 over-rejected on live frames.
+PREDICTION_THRESHOLD = 0.77
 
 
-def preview_stream(port: str, output_path: str, save_interval_seconds: float):
+def preview_stream(port: str, output_path: str, save_interval_seconds: float, threshold: float):
     print(f"Opening serial port {port}... ", end="")
     preamble_timeouts = 0
     try:
@@ -39,6 +43,7 @@ def preview_stream(port: str, output_path: str, save_interval_seconds: float):
     font = pygame.font.Font(None, 24)
 
     print("connected.")
+    print(f"Acceptance threshold: best_conf >= {threshold:.2f}")
     print("Press SPACE to save current annotated frame.")
     print(f"Saving one frame and prediction every {save_interval_seconds:g} seconds.")
     print("Press 'r' to toggle timed recording.")
@@ -65,7 +70,7 @@ def preview_stream(port: str, output_path: str, save_interval_seconds: float):
                         recording = not recording
                         print(f"Recording {'enabled' if recording else 'disabled'}.")
                     elif event.key == pygame.K_SPACE and last_surface is not None:
-                        save_frame(output_path, last_surface, last_prediction, font)
+                        save_frame(output_path, last_surface, last_prediction, font, threshold)
 
             result = capture_frame(serial_port)
             if result is None:
@@ -81,11 +86,11 @@ def preview_stream(port: str, output_path: str, save_interval_seconds: float):
             last_prediction = prediction
             now = time.monotonic()
             if recording and now - last_save_time >= save_interval_seconds:
-                save_frame(output_path, last_surface, last_prediction, font)
+                save_frame(output_path, last_surface, last_prediction, font, threshold)
                 last_save_time = now
 
             screen.blit(surface, (0, 0))
-            draw_prediction_overlay(screen, font, prediction)
+            draw_prediction_overlay(screen, font, prediction, threshold)
             pygame.display.flip()
             time.sleep(0.001)
     finally:
@@ -140,7 +145,10 @@ def parse_prediction(chunk: bytes) -> dict[str, object] | None:
         return None
 
 
-def prediction_overlay_lines(prediction: dict[str, object] | None) -> tuple[list[str], str, int, float]:
+def prediction_overlay_lines(
+    prediction: dict[str, object] | None,
+    threshold: float = PREDICTION_THRESHOLD,
+) -> tuple[list[str], str, int, float]:
     if prediction is None:
         return ["Prediction: NO_DATA"], "", -1, 0.0
 
@@ -151,7 +159,7 @@ def prediction_overlay_lines(prediction: dict[str, object] | None) -> tuple[list
         best_index = max(range(len(scores)), key=scores.__getitem__)
         best_label = CLASS_NAMES[best_index]
         best_score = scores[best_index]
-        result_label = best_label if best_score >= PREDICTION_THRESHOLD else "Unknown"
+        result_label = best_label if best_score >= threshold else "Unknown"
         lines = [
             f"Prediction: {result_label}",
             f"Best: {best_label} ({best_score * 100:.1f}%)",
@@ -162,8 +170,13 @@ def prediction_overlay_lines(prediction: dict[str, object] | None) -> tuple[list
     return ["Prediction: NO_FACE", "Best: none"], "NO_FACE", -1, 0.0
 
 
-def draw_prediction_overlay(screen: pygame.Surface, font: pygame.font.Font, prediction: dict[str, object] | None):
-    lines, _, _, _ = prediction_overlay_lines(prediction)
+def draw_prediction_overlay(
+    screen: pygame.Surface,
+    font: pygame.font.Font,
+    prediction: dict[str, object] | None,
+    threshold: float = PREDICTION_THRESHOLD,
+):
+    lines, _, _, _ = prediction_overlay_lines(prediction, threshold)
     padding = 8
     rendered = [font.render(line, True, (255, 255, 255)) for line in lines]
     width = max(surface.get_width() for surface in rendered) + padding * 2
@@ -185,12 +198,13 @@ def save_frame(
     surface: pygame.Surface,
     prediction: dict[str, object] | None,
     font: pygame.font.Font,
+    threshold: float = PREDICTION_THRESHOLD,
 ):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     image_filename = f"frame_{timestamp}.png"
     image_path = os.path.join(output_path, image_filename)
     annotated_surface = surface.copy()
-    draw_prediction_overlay(annotated_surface, font, prediction)
+    draw_prediction_overlay(annotated_surface, font, prediction, threshold)
     pygame.image.save(annotated_surface, image_path)
 
     label = ""
@@ -205,7 +219,7 @@ def save_frame(
     bbox = ["", "", "", ""]
     crop = ["", "", "", ""]
     if prediction is not None:
-        _, best_label_value, best_index_value, best_score = prediction_overlay_lines(prediction)
+        _, best_label_value, best_index_value, best_score = prediction_overlay_lines(prediction, threshold)
         label = str(prediction["label"])
         index = str(prediction["index"])
         confidence = f"{float(prediction['confidence']):.6f}"
@@ -284,9 +298,21 @@ if __name__ == "__main__":
             f"(default: {DEFAULT_SAVE_INTERVAL_SECONDS:g})"
         ),
     )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=PREDICTION_THRESHOLD,
+        help=(
+            "Minimum softmax confidence for the overlay to display the predicted "
+            "class instead of 'Unknown'. Default matches the calibrated operating "
+            f"point in bench/results/stats_summary.md (q={PREDICTION_THRESHOLD:.2f})."
+        ),
+    )
     args = parser.parse_args()
 
     if args.save_interval <= 0:
         parser.error("--save-interval must be greater than 0")
+    if not 0.0 <= args.threshold <= 1.0:
+        parser.error("--threshold must be in [0.0, 1.0]")
 
-    preview_stream(args.port, args.output_path, args.save_interval)
+    preview_stream(args.port, args.output_path, args.save_interval, args.threshold)
