@@ -12,10 +12,17 @@ This repository contains a small hardware/software codesign project for running 
 
 ## Main Workflow
 
-1. Train and compare candidate models in `ModelExploration`.
-2. Export the selected model as `.tflite`, `.c`, and `.h` files.
-3. Build and flash the ESP32-S3 firmware in `esp32/`.
-4. Test real-time camera predictions on the device.
+1. Collect and prepare dataset face images for each class.
+2. Train and compare candidate models in `ModelExploration`.
+3. Select the Xception-based model based on the trade-off between accuracy, model size, memory usage, and inference latency.
+4. Convert the selected model to TensorFlow Lite format and export it as `.c` and `.h` files for firmware embedding.
+5. Build and flash the ESP32-S3 firmware in `esp32/`.
+6. Run the deployed pipeline on the device: camera capture, face detection, Xception inference, and prediction thresholding.
+7. Evaluate real-world results.
+
+## Chosen Model
+
+The deployed face-classification model is based on the Xception architecture. Xception was selected because it uses depthwise separable convolutions, which significantly reduce the number of parameters and computational operations compared to standard convolutions. This makes the architecture lightweight and efficient while still preserving important image features for classification.
 
 ## Build
 
