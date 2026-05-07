@@ -1,4 +1,9 @@
 # Face Recognition on XIAO ESP32-S3 Sense
+## Author
+Rifki Firdaus - s250169
+Jakub Piotrowski - s253074
+Mohamed Amine Cheikh - s252221
+
 
 DTU 02214 - Hardware/Software Codesign
 
