@@ -1,5 +1,5 @@
 # Face Recognition on XIAO ESP32-S3 Sense
-## Author
+## Authors
 Rifki Firdaus - s250169
 Jakub Piotrowski - s253074
 Mohamed Amine Cheikh - s252221
