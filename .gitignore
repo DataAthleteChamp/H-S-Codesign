@@ -17,6 +17,8 @@ ModelExploration/facecropped_pred
 ModelExploration/FaceCropDataset.ipynb
 ModelExploration/ModelPerformanceComparison.ipynb
 ModelExploration/labeled_pred_frames
+labeled_pred_frames
+rifki_result
 
 
 data_face_crop_balanced
