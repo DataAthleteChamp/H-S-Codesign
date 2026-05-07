@@ -7,6 +7,7 @@
 #include "driver/usb_serial_jtag.h"
 #include "esp_log.h"
 #include "esp_heap_caps.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 
 #include "camera.h"
@@ -48,6 +49,11 @@ static bool stream_enabled = false;
 #if HAVE_HUMAN_FACE_DETECT
 static HumanFaceDetect *face_detector = nullptr;
 #endif
+
+static inline uint32_t micros()
+{
+    return static_cast<uint32_t>(esp_timer_get_time());
+}
 
 static bool ensure_rgb888_buffer()
 {
@@ -336,6 +342,8 @@ void loop()
 {
     maybe_handle_serial_command();
 
+    const uint32_t e2e_start_us = micros();
+
     if (!camera_capture_frame(frame_buffer))
     {
         ESP_LOGW(TAG, "Frame capture failed, retrying...");
@@ -372,6 +380,8 @@ void loop()
 
     const int best_class = best_prediction_index(prediction);
     const float best_conf = prediction[best_class];
+    const uint32_t e2e_latency_us = micros() - e2e_start_us;
+    ESP_LOGI(TAG, "End-to-end latency: %lu us", static_cast<unsigned long>(e2e_latency_us));
 
     if (best_conf >= PREDICTION_THRESHOLD)
     {

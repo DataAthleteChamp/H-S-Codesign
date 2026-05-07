@@ -3,6 +3,7 @@
 
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 
 #include "camera.h"
 #include "inference.h"
@@ -23,6 +24,11 @@ static TfLiteTensor *output = nullptr;
 static const char *TAG = "Inference";
 static bool logged_input_stats = false;
 static int output_debug_logs_left = 5;
+
+static inline uint32_t micros()
+{
+    return static_cast<uint32_t>(esp_timer_get_time());
+}
 
 static inline int8_t quantize_to_int8(float value, float scale, int32_t zero_point)
 {
@@ -255,11 +261,14 @@ void inference_preprocess_crop(const uint8_t *rgb565_frame, const CropRect *crop
 
 bool inference_predict(float *prediction)
 {
+    const uint32_t inference_start_us = micros();
     if (interpreter->Invoke() != kTfLiteOk)
     {
         ESP_LOGE(TAG, "Invoke failed!");
         return false;
     }
+    const uint32_t inference_latency_us = micros() - inference_start_us;
+    ESP_LOGI(TAG, "Model inference latency: %lu us", static_cast<unsigned long>(inference_latency_us));
 
     if (output->type == kTfLiteInt8)
     {
